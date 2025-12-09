@@ -8,7 +8,7 @@ const announcementSchema = new mongoose.Schema({
   tags: [{ type: String }], // User provided tags for image generation
   category: { 
     type: String, 
-    enum: ['All', 'Academic', 'Administrative/Misc', 'Co-curricular/Sports/Cultural', 'Placement'],
+    enum: ['All', 'Academic', 'Administrative/Misc', 'Co-curricular/Sports/Cultural', 'Placement', 'Benefits'],
     default: 'All'
   },
   authorId: { type: String, required: true }, // ID of the teacher who created it

@@ -225,6 +225,7 @@ const TeacherDashboard = () => {
                         <option value="Administrative/Misc">Administrative/Misc</option>
                         <option value="Co-curricular/Sports/Cultural">Co-curricular/Sports/Cultural</option>
                         <option value="Placement">Placement</option>
+                        <option value="Benefits">Benefits</option>
                       </select>
                       <p className="text-xs text-gray-400 mt-2">Select the category for this announcement</p>
                     </div>
