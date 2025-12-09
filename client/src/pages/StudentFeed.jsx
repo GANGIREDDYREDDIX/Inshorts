@@ -13,7 +13,7 @@ const StudentFeed = () => {
   const navigate = useNavigate();
 
   // FIX 2: Variable name consistency
-  const categories = ['All', 'Academic', 'Administrative/Misc', 'Co-curricular/Sports/Cultural', 'Placement'];
+  const categories = ['All', 'Academic', 'Administrative/Misc', 'Co-curricular/Sports/Cultural', 'Placement', 'Benefits'];
 
   useEffect(() => {
     // Replace with your actual API endpoint

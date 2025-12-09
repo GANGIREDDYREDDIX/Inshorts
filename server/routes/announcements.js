@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
 
 // Create announcement (Teacher only)
 router.post('/', async (req, res) => {
-  const { title, description, tags, authorId, category, summary: manualSummary } = req.body;
+  const { title, description, tags, authorId, category, summary: manualSummary, audience, students, staff } = req.body;
   
   if (!title || !description || !authorId) {
     return res.status(400).json({ message: 'Title, description, and authorId are required' });
@@ -38,6 +38,9 @@ router.post('/', async (req, res) => {
       imageUrl,
       tags,
       category: category || 'All',
+      audience: audience || 'Both',
+      students: Array.isArray(students) ? students : [],
+      staff: Array.isArray(staff) ? staff : [],
       authorId
     });
 
@@ -50,7 +53,7 @@ router.post('/', async (req, res) => {
 
 // Update announcement
 router.put('/:id', async (req, res) => {
-  const { title, description, tags, category, summary: manualSummary } = req.body;
+  const { title, description, tags, category, summary: manualSummary, audience, students, staff } = req.body;
   try {
     const announcement = await Announcement.findById(req.params.id);
     if (!announcement) return res.status(404).json({ message: 'Announcement not found' });
@@ -79,6 +82,9 @@ router.put('/:id', async (req, res) => {
     announcement.originalDescription = description || announcement.originalDescription;
     announcement.tags = tags || announcement.tags;
     announcement.category = category || announcement.category;
+    announcement.audience = audience || announcement.audience;
+    announcement.students = Array.isArray(students) ? students : announcement.students;
+    announcement.staff = Array.isArray(staff) ? staff : announcement.staff;
     announcement.summary = summary;
     announcement.imageUrl = imageUrl;
 
