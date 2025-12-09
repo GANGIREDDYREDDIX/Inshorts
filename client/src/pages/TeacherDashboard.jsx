@@ -13,6 +13,10 @@ const TeacherDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
+  const [customImageUrl, setCustomImageUrl] = useState('');
+  const [imageLoading, setImageLoading] = useState(false);
   const navigate = useNavigate();
 
   const user = JSON.parse(localStorage.getItem('user'));
@@ -75,6 +79,40 @@ const TeacherDashboard = () => {
       fetchAnnouncements();
     } catch (err) {
       alert('Failed to delete');
+    }
+  };
+
+  const handleImageModalOpen = (announcement) => {
+    setSelectedAnnouncement(announcement);
+    setCustomImageUrl('');
+    setShowImageModal(true);
+  };
+
+  const handleRegenerateImage = async () => {
+    if (!selectedAnnouncement) return;
+    setImageLoading(true);
+    try {
+      console.log('Regenerating image for:', selectedAnnouncement._id);
+      console.log('Custom URL:', customImageUrl.trim());
+      const res = await axios.post(`http://localhost:5001/api/announcements/${selectedAnnouncement._id}/regenerate-image`, {
+        customImageUrl: customImageUrl.trim()
+      });
+      console.log('Response:', res.data);
+      // Update announcements list
+      setAnnouncements(announcements.map(a => a._id === res.data._id ? res.data : a));
+      // Update selected announcement to show new image in modal
+      setSelectedAnnouncement(res.data);
+      alert(customImageUrl.trim() ? 'Image updated successfully!' : 'New image generated successfully!');
+      // Close modal after a brief delay to show the new image
+      setTimeout(() => {
+        setShowImageModal(false);
+      }, 1000);
+    } catch (err) {
+      console.error('Error details:', err.response?.data || err.message);
+      const errorMsg = err.response?.data?.message || err.message || 'Unknown error';
+      alert(`Failed to update image: ${errorMsg}`);
+    } finally {
+      setImageLoading(false);
     }
   };
 
@@ -218,7 +256,7 @@ const TeacherDashboard = () => {
                     <button
                       type="submit"
                       disabled={loading}
-                      className={`px-8 py-3 rounded-xl text-white font-bold text-lg transition-all transform hover:scale-[1.02] ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-blue-700 shadow-lg hover:shadow-blue-500/30'}`}
+                      className={`px-8 py-3 rounded-xl text-white font-bold text-lg transition-all transform hover:scale-[1.02] ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-linear-to-r from-blue-600 to-blue-700 shadow-lg hover:shadow-blue-500/30'}`}
                     >
                       {loading ? 'Processing with AI...' : (editingId ? 'Update Announcement' : 'Post Announcement')}
                     </button>
@@ -239,6 +277,13 @@ const TeacherDashboard = () => {
               <div className="h-48 overflow-hidden relative group">
                 <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                 <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={() => handleImageModalOpen(item)}
+                    className="bg-white/90 p-2 rounded-full text-purple-600 hover:bg-white shadow-sm"
+                    title="Change/Regenerate Image"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                  </button>
                   <button 
                     onClick={() => handleEdit(item)}
                     className="bg-white/90 p-2 rounded-full text-blue-600 hover:bg-white shadow-sm"
@@ -292,6 +337,105 @@ const TeacherDashboard = () => {
         )}
 
       </div>
+
+      {/* Image Management Modal */}
+      <AnimatePresence>
+        {showImageModal && selectedAnnouncement && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setShowImageModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden"
+            >
+              <div className="bg-linear-to-r from-purple-600 to-blue-600 p-6 text-white">
+                <h3 className="text-2xl font-bold mb-2">Change Image</h3>
+                <p className="text-purple-100 text-sm">{selectedAnnouncement.title}</p>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* Current Image Preview */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Current Image</label>
+                  <div className="rounded-xl overflow-hidden border-2 border-gray-200 relative">
+                    <img 
+                      key={selectedAnnouncement.imageUrl}
+                      src={`${selectedAnnouncement.imageUrl}?t=${Date.now()}`}
+                      alt={selectedAnnouncement.title}
+                      className="w-full h-64 object-cover"
+                    />
+                    {imageLoading && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <div className="text-white text-center">
+                          <svg className="animate-spin h-12 w-12 mx-auto mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <p className="text-sm font-semibold">Generating new image...</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Custom URL Input */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Custom Image URL (Optional)</label>
+                  <input
+                    type="url"
+                    value={customImageUrl}
+                    onChange={(e) => setCustomImageUrl(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all bg-gray-50 focus:bg-white"
+                    placeholder="https://example.com/image.jpg"
+                  />
+                  <p className="text-xs text-gray-500 mt-2">Leave empty to auto-generate a new image with AI</p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={handleRegenerateImage}
+                    disabled={imageLoading}
+                    className={`flex-1 px-6 py-3 rounded-xl text-white font-bold transition-all transform hover:scale-[1.02] ${
+                      imageLoading 
+                        ? 'bg-gray-400 cursor-not-allowed' 
+                        : 'bg-linear-to-r from-purple-600 to-blue-600 shadow-lg hover:shadow-purple-500/30'
+                    }`}
+                  >
+                    {imageLoading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processing...
+                      </span>
+                    ) : customImageUrl.trim() ? (
+                      '✓ Use This Image'
+                    ) : (
+                      '🎨 Generate New Image'
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setShowImageModal(false)}
+                    disabled={imageLoading}
+                    className="px-6 py-3 rounded-xl border-2 border-gray-200 text-gray-700 font-bold hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
