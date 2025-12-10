@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import API_ENDPOINTS from '../config/api';
 
 const Login = () => {
   const [role, setRole] = useState('student');
@@ -12,7 +13,7 @@ const Login = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post('http://localhost:5001/api/auth/login', { regId, password });
+      const res = await axios.post(API_ENDPOINTS.AUTH.LOGIN, { regId, password });
       if (res.data.role !== role) {
         setError('Invalid role selected for this user');
         return;

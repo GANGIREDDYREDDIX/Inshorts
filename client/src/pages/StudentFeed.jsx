@@ -2,26 +2,22 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import API_ENDPOINTS from '../config/api';
 
 const StudentFeed = () => {
   const [announcements, setAnnouncements] = useState([]);
   const [filteredAnnouncements, setFilteredAnnouncements] = useState([]);
-  
-  // FIX 1: Ensure default state matches the first category
   const [selectedCategory, setSelectedCategory] = useState('All'); 
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const navigate = useNavigate();
 
-  // FIX 2: Variable name consistency
   const categories = ['All', 'Academic', 'Administrative/Misc', 'Co-curricular/Sports/Cultural', 'Placement', 'Benefits'];
 
   useEffect(() => {
-    // Replace with your actual API endpoint
     const fetchAnnouncements = async () => {
       try {
-        const res = await axios.get('http://localhost:5001/api/announcements');
+        const res = await axios.get(API_ENDPOINTS.ANNOUNCEMENTS.BASE);
         setAnnouncements(res.data);
-        // Initialize filtered list with all data
         setFilteredAnnouncements(res.data); 
       } catch (err) {
         console.error(err);
@@ -296,7 +292,7 @@ const StudentFeed = () => {
                           return (
                             <div key={att._id} className="flex items-center gap-2">
                               <a
-                                href={`http://localhost:5001${att.fileUrl}`}
+                                href={`${API_ENDPOINTS.BASE_URL}${att.fileUrl}`}
                                 download={att.fileName}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -317,7 +313,7 @@ const StudentFeed = () => {
                               </a>
                               {isImage && (
                                 <a
-                                  href={`http://localhost:5001${att.fileUrl}`}
+                                  href={`${API_ENDPOINTS.BASE_URL}${att.fileUrl}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="px-3 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
