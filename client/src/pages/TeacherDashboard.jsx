@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
+import readXlsxFile from 'read-excel-file';
 
 const TeacherDashboard = () => {
   const [announcements, setAnnouncements] = useState([]);
@@ -93,16 +93,23 @@ const TeacherDashboard = () => {
           error: (err) => reject(err)
         });
       } else {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-          resolve(json);
-        };
-        reader.onerror = (err) => reject(err);
-        reader.readAsArrayBuffer(file);
+        readXlsxFile(file)
+          .then((rows) => {
+            if (rows.length === 0) {
+              resolve([]);
+              return;
+            }
+            const headers = rows[0];
+            const data = rows.slice(1).map(row => {
+              const obj = {};
+              headers.forEach((header, i) => {
+                obj[header] = row[i] || '';
+              });
+              return obj;
+            });
+            resolve(data);
+          })
+          .catch((err) => reject(err));
       }
     });
   };
