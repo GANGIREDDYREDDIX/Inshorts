@@ -22,6 +22,7 @@ const TeacherDashboard = () => {
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [customImageUrl, setCustomImageUrl] = useState('');
   const [imageLoading, setImageLoading] = useState(false);
+  const [attachments, setAttachments] = useState([]);
   const navigate = useNavigate();
 
   const user = JSON.parse(localStorage.getItem('user'));
@@ -59,6 +60,7 @@ const TeacherDashboard = () => {
     setAudience('Both');
     setStudentsList([]);
     setStaffList([]);
+    setAttachments([]);
     setEditingId(null);
     setShowForm(false);
   };
@@ -148,6 +150,44 @@ const TeacherDashboard = () => {
     }
   };
 
+  const handleAttachmentAdd = (e) => {
+    const files = e.target.files;
+    if (!files) return;
+    
+    const newAttachments = Array.from(files).map(file => ({
+      id: Date.now() + Math.random(),
+      file,
+      name: file.name,
+      size: file.size
+    }));
+    
+    setAttachments([...attachments, ...newAttachments]);
+    e.target.value = ''; // Reset input
+  };
+
+  const handleAttachmentRemove = (id) => {
+    setAttachments(attachments.filter(att => att.id !== id));
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const getFileIcon = (fileName) => {
+    const ext = fileName.split('.').pop().toLowerCase();
+    const iconMap = {
+      pdf: '📕', doc: '📘', docx: '📘',
+      xls: '📗', xlsx: '📗', ppt: '📙', pptx: '📙',
+      txt: '📄', jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️',
+      zip: '📦', rar: '📦'
+    };
+    return iconMap[ext] || '📎';
+  };
+
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this announcement?')) return;
     try {
@@ -198,29 +238,37 @@ const TeacherDashboard = () => {
     const cleanTags = tags.filter(t => t.trim() !== '');
     
     try {
-      const payload = {
-        title,
-        description,
-        summary,
-        tags: cleanTags,
-        category,
-        audience,
-        students: studentsList,
-        staff: staffList
-      };
+      const formData = new FormData();
+      formData.append('title', title);
+      formData.append('description', description);
+      formData.append('summary', summary);
+      formData.append('tags', JSON.stringify(cleanTags));
+      formData.append('category', category);
+      formData.append('audience', audience);
+      formData.append('students', JSON.stringify(studentsList));
+      formData.append('staff', JSON.stringify(staffList));
+      
+      // Add files
+      attachments.forEach(att => {
+        formData.append('files', att.file);
+      });
+      
       if (editingId) {
-        await axios.put(`http://localhost:5001/api/announcements/${editingId}`, payload);
+        await axios.put(`http://localhost:5001/api/announcements/${editingId}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
         alert('Announcement Updated!');
       } else {
-        await axios.post('http://localhost:5001/api/announcements', { 
-          ...payload,
-          authorId: user.id
+        formData.append('authorId', user.id);
+        await axios.post('http://localhost:5001/api/announcements', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
         });
         alert('Announcement Posted Successfully!');
       }
       resetForm();
       fetchAnnouncements();
     } catch (err) {
+      console.error(err);
       alert('Failed to save announcement');
     } finally {
       setLoading(false);
@@ -357,6 +405,43 @@ const TeacherDashboard = () => {
                         required
                       />
                     </div>
+                  </div>
+
+                  <div className="bg-green-50 p-6 rounded-xl border border-green-200">
+                    <label className="block text-sm font-semibold text-gray-700 mb-4">📎 Attachments</label>
+                    <div className="mb-4">
+                      <input
+                        type="file"
+                        multiple
+                        onChange={handleAttachmentAdd}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                      />
+                      <p className="text-xs text-gray-400 mt-2">Upload documents, images, PDFs, etc.</p>
+                    </div>
+
+                    {attachments.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-gray-600 mb-3">Selected files: {attachments.length}</p>
+                        {attachments.map((att) => (
+                          <div key={att.id} className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 hover:border-green-300 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <span className="text-2xl">{getFileIcon(att.name)}</span>
+                              <div>
+                                <p className="font-medium text-gray-900 text-sm truncate">{att.name}</p>
+                                <p className="text-xs text-gray-500">{formatFileSize(att.size)}</p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleAttachmentRemove(att.id)}
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div>
