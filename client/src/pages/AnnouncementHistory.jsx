@@ -62,13 +62,20 @@ const AnnouncementHistory = () => {
         case 'Oldest First':
           return new Date(a.createdAt) - new Date(b.createdAt);
         case 'Title A-Z':
-          return a.title.toLowerCase().localeCompare(b.title.toLowerCase());
+          const titleA = (a.title || '').toLowerCase().trim();
+          const titleB = (b.title || '').toLowerCase().trim();
+          return titleA.localeCompare(titleB);
         case 'Title Z-A':
-          return b.title.toLowerCase().localeCompare(a.title.toLowerCase());
+          const titleZA = (a.title || '').toLowerCase().trim();
+          const titleZB = (b.title || '').toLowerCase().trim();
+          return titleZB.localeCompare(titleZA);
         default:
           return 0;
       }
     });
+
+    console.log('Sort By:', sortBy);
+    console.log('First 3 titles after sorting:', sorted.slice(0, 3).map(a => a.title));
 
     setFilteredAnnouncements(sorted);
   }, [searchQuery, searchBy, sortBy, announcements]);
