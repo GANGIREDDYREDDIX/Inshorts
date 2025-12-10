@@ -34,51 +34,73 @@ const maskUri = (uri) => {
 console.log('Connecting to MongoDB at', maskUri(MONGO_URI));
 
 // Recommended options; increase serverSelectionTimeoutMS for slower networks
-mongoose.connect(MONGO_URI, {
-  // useNewUrlParser and useUnifiedTopology are accepted; mongoose v6+ uses them by default
-  serverSelectionTimeoutMS: 30000, // 30s timeout for server selection
-  socketTimeoutMS: 45000
-})
-.then(() => {
-  console.log('MongoDB Connected');
-  seedUsers();
-})
-.catch(err => {
-  console.error('Mongoose connection error:');
-  console.error(err && err.message ? err.message : err);
-  console.error('Full error: ', err);
-});
-
-// Connection event listeners for additional diagnostics
+// Connection event listeners for diagnostics
 mongoose.connection.on('connected', () => console.log('Mongoose event: connected'));
 mongoose.connection.on('error', (err) => console.error('Mongoose event: error', err && err.message));
 mongoose.connection.on('disconnected', () => console.warn('Mongoose event: disconnected'));
 
 // Seed Users
 const seedUsers = async () => {
-  const count = await User.countDocuments();
-  if (count === 0) {
-    const users = [
-      { regId: 'teacher1', password: 'pass123', role: 'teacher' },
-      { regId: 'student1', password: 'pass123', role: 'student' }
-    ];
-    await User.insertMany(users);
-    console.log('Users Seeded');
+  try {
+    const count = await User.countDocuments();
+    if (count === 0) {
+      const users = [
+        { regId: 'teacher1', password: 'pass123', role: 'teacher' },
+        { regId: 'student1', password: 'pass123', role: 'student' }
+      ];
+      await User.insertMany(users);
+      console.log('Users Seeded');
+    } else {
+      console.log('Users already exist, skipping seed');
+    }
+  } catch (err) {
+    console.error('Error seeding users:', err.message);
   }
 };
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/announcements', announcementRoutes);
+// Connect to MongoDB and start server only after connection is established
+const startServer = async () => {
+  try {
+    // Wait for MongoDB connection with proper options
+    await mongoose.connect(MONGO_URI, {
+      serverSelectionTimeoutMS: 30000, // 30s timeout for server selection
+      socketTimeoutMS: 45000,
+      // Disable buffering - fail fast if not connected
+      bufferCommands: false
+    });
+    
+    console.log('MongoDB Connected successfully');
+    
+    // Seed users after connection is confirmed
+    await seedUsers();
+    
+    // Setup routes after DB is ready
+    app.use('/api/auth', authRoutes);
+    app.use('/api/announcements', announcementRoutes);
+    
+    app.get('/', (req, res) => {
+      res.send('Server is running');
+    });
+    
+    // Start server only after DB connection is confirmed
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on port ${PORT}`);
+    }).on('error', (err) => {
+      console.error('Server failed to start:', err);
+      process.exit(1);
+    });
+    
+  } catch (err) {
+    console.error('Failed to connect to MongoDB:');
+    console.error('Error message:', err.message);
+    console.error('Full error:', err);
+    console.error('\nPlease check:');
+    console.error('1. MongoDB Atlas IP whitelist includes your current IP');
+    console.error('2. Database credentials are correct in .env file');
+    console.error('3. Network connection is stable');
+    process.exit(1);
+  }
+};
 
-app.get('/', (req, res) => {
-  res.send('Server is running');
-});
-
-// Start server - bind to 0.0.0.0 for container deployment
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-}).on('error', (err) => {
-  console.error('Server failed to start:', err);
-  process.exit(1);
-});
+// Start the server
+startServer();
