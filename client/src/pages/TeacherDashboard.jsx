@@ -235,17 +235,17 @@ const TeacherDashboard = () => {
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Teacher Portal</h1>
             <div className="flex items-center gap-4">
               <button 
+                onClick={() => navigate('/history')}
+                className="bg-purple-200 hover:bg-purple-300 text-purple-700 px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M3 21v-5h5"></path></svg>
+                History
+              </button>
+              <button 
                 onClick={() => { resetForm(); setShowForm(!showForm); }}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
               >
                 {showForm ? 'Cancel' : '+ New Announcement'}
-              </button>
-              <button 
-                onClick={() => navigate('/history')}
-                className="text-gray-600 hover:text-gray-900 transition-colors"
-                title="View Announcement History"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"></path><polyline points="17 8 12 13 7 8"></polyline></svg>
               </button>
               <button onClick={handleLogout} className="text-gray-500 hover:text-red-600 font-medium transition-colors">Logout</button>
             </div>
