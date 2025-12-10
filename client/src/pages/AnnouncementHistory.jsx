@@ -66,9 +66,9 @@ const AnnouncementHistory = () => {
           const titleB = (b.title || '').toLowerCase().trim();
           return titleA.localeCompare(titleB);
         case 'Title Z-A':
-          const titleZA = (a.title || '').toLowerCase().trim();
-          const titleZB = (b.title || '').toLowerCase().trim();
-          return titleZB.localeCompare(titleZA);
+          const titleA_ZA = (a.title || '').toLowerCase().trim();
+          const titleB_ZA = (b.title || '').toLowerCase().trim();
+          return titleB_ZA.localeCompare(titleA_ZA);
         default:
           return 0;
       }
