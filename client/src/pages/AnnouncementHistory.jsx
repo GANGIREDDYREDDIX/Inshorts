@@ -62,9 +62,9 @@ const AnnouncementHistory = () => {
         case 'Oldest First':
           return new Date(a.createdAt) - new Date(b.createdAt);
         case 'Title A-Z':
-          return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+          return a.title.toLowerCase().localeCompare(b.title.toLowerCase());
         case 'Title Z-A':
-          return b.title.localeCompare(a.title, undefined, { sensitivity: 'base' });
+          return b.title.toLowerCase().localeCompare(a.title.toLowerCase());
         default:
           return 0;
       }
