@@ -209,23 +209,112 @@ const TeacherDashboard = () => {
   };
 
   const handlePreviewFile = (file) => {
-    // Create preview for images
+    // Handle image preview
     if (file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = (e) => {
         const previewWindow = window.open('', '_blank');
         previewWindow.document.write(`
           <html>
-            <head><title>Preview: ${file.name}</title></head>
-            <body style="margin:0; display:flex; justify-content:center; align-items:center; min-height:100vh; background:#000;">
-              <img src="${e.target.result}" style="max-width:100%; max-height:100vh;" />
+            <head>
+              <title>Preview: ${file.name}</title>
+              <style>
+                body { margin: 0; padding: 20px; background: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial; }
+                .container { max-width: 900px; margin: 0 auto; }
+                .header { color: #fff; margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 15px; }
+                .filename { font-size: 18px; font-weight: 600; margin-bottom: 5px; }
+                .filetype { font-size: 12px; color: #aaa; }
+                img { max-width: 100%; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">
+                  <div class="filename">📸 ${file.name}</div>
+                  <div class="filetype">${file.type} • ${(file.size / 1024).toFixed(1)} KB</div>
+                </div>
+                <img src="${e.target.result}" />
+              </div>
             </body>
           </html>
         `);
       };
       reader.readAsDataURL(file);
-    } else {
-      alert(`Preview not available for ${file.type}. File will be available after upload.`);
+    }
+    // Handle PDF preview
+    else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const previewWindow = window.open('', '_blank');
+        const pdfDataUrl = e.target.result;
+        previewWindow.document.write(`
+          <html>
+            <head>
+              <title>Preview: ${file.name}</title>
+              <style>
+                body { margin: 0; padding: 10px; background: #f0f0f0; }
+                .header { background: white; padding: 15px; margin-bottom: 10px; border-radius: 4px; }
+                .filename { font-weight: 600; margin-bottom: 5px; }
+                .filetype { font-size: 12px; color: #666; }
+                iframe { width: 100%; height: calc(100vh - 100px); border: none; border-radius: 4px; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <div class="filename">📄 ${file.name}</div>
+                <div class="filetype">PDF • ${(file.size / 1024).toFixed(1)} KB</div>
+              </div>
+              <iframe src="${pdfDataUrl}"></iframe>
+            </body>
+          </html>
+        `);
+      };
+      reader.readAsDataURL(file);
+    }
+    // Handle text file preview
+    else if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const previewWindow = window.open('', '_blank');
+        const content = e.target.result.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        previewWindow.document.write(`
+          <html>
+            <head>
+              <title>Preview: ${file.name}</title>
+              <style>
+                body { margin: 0; padding: 20px; background: #1e1e1e; font-family: 'Monaco', 'Courier New', monospace; color: #d4d4d4; }
+                .container { max-width: 1000px; margin: 0 auto; }
+                .header { color: #fff; margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 15px; }
+                .filename { font-size: 18px; font-weight: 600; margin-bottom: 5px; }
+                .filetype { font-size: 12px; color: #aaa; }
+                pre { background: #252526; padding: 15px; border-radius: 4px; overflow-x: auto; line-height: 1.5; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">
+                  <div class="filename">📝 ${file.name}</div>
+                  <div class="filetype">Text File • ${(file.size / 1024).toFixed(1)} KB</div>
+                </div>
+                <pre>${content}</pre>
+              </div>
+            </body>
+          </html>
+        `);
+      };
+      reader.readAsText(file);
+    }
+    // For Word docs, show message and open download
+    else if (file.type === 'application/msword' || file.name.endsWith('.doc') || file.name.endsWith('.docx')) {
+      const blobUrl = URL.createObjectURL(file);
+      window.open(blobUrl, '_blank');
+      alert(`📄 ${file.name}\n\nWord documents cannot be previewed in browser. The file is being opened in your default viewer.`);
+    }
+    // For other documents
+    else {
+      const blobUrl = URL.createObjectURL(file);
+      window.open(blobUrl, '_blank');
+      alert(`📎 ${file.name}\n\nFile type: ${file.type || 'Unknown'}\nSize: ${(file.size / 1024).toFixed(1)} KB\n\nThe file is being opened in your default viewer.`);
     }
   };
 
@@ -525,22 +614,41 @@ const TeacherDashboard = () => {
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2 ml-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const ext = att.fileName.split('.').pop().toLowerCase();
+                                      if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) {
+                                        window.open(`http://localhost:5001${att.fileUrl}`, '_blank');
+                                      } else if (ext === 'pdf') {
+                                        window.open(`http://localhost:5001${att.fileUrl}`, '_blank');
+                                      } else {
+                                        window.open(`http://localhost:5001${att.fileUrl}`, '_blank');
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all hover:shadow-md active:scale-95"
+                                    title="Preview or download file"
+                                  >
+                                    <span>👁️</span>
+                                    <span>Preview</span>
+                                  </button>
                                   <a
                                     href={`http://localhost:5001${att.fileUrl}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                                    title="View/Download file"
+                                    download={att.fileName}
+                                    className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all hover:shadow-md active:scale-95"
+                                    title="Download file"
                                   >
-                                    👁️ View
+                                    <span>⬇️</span>
+                                    <span>Download</span>
                                   </a>
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteAttachment(editingId, att._id)}
-                                    className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
-                                    title="Delete attachment"
+                                    className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all hover:shadow-md active:scale-95"
+                                    title="Delete this attachment"
                                   >
-                                    🗑️ Delete
+                                    <span>✕</span>
+                                    <span>Remove</span>
                                   </button>
                                 </div>
                               </div>
@@ -577,19 +685,21 @@ const TeacherDashboard = () => {
                                     <button
                                       type="button"
                                       onClick={() => handlePreviewFile(file)}
-                                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                      className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all hover:shadow-md active:scale-95"
                                       title="Preview image"
                                     >
-                                      👁️ Preview
+                                      <span>👁️</span>
+                                      <span>Preview</span>
                                     </button>
                                   )}
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveSelectedFile(idx)}
-                                    className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
-                                    title="Remove file"
+                                    className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all hover:shadow-md active:scale-95"
+                                    title="Remove this file"
                                   >
-                                    🗑️ Remove
+                                    <span>✕</span>
+                                    <span>Remove</span>
                                   </button>
                                 </div>
                               </div>
