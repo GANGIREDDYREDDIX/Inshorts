@@ -10,7 +10,8 @@ const generateSummary = async (text) => {
       return generateFallbackSummary(text);
     }
     
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    // Use gemini-1.5-flash (stable model)
+    const model = genAI.getGenerativeModel({ model: "models/gemini-1.5-flash" });
     const prompt = `Summarize the following university announcement into exactly 60 words, keeping the key information intact. Make it engaging for students. \n\nAnnouncement: ${text}`;
     
     const result = await model.generateContent(prompt);
