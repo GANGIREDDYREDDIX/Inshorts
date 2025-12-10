@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
+import readXlsxFile from 'read-excel-file';
 
 const TeacherDashboard = () => {
   const [announcements, setAnnouncements] = useState([]);
@@ -32,7 +32,8 @@ const TeacherDashboard = () => {
   const fetchAnnouncements = async () => {
     try {
       const res = await axios.get(`http://localhost:5001/api/announcements?authorId=${user.id}`);
-      setAnnouncements(res.data);
+      // Force a new array reference to trigger re-render
+      setAnnouncements([...res.data]);
     } catch (err) {
       console.error('Failed to fetch announcements:', err.message);
     }
@@ -99,16 +100,21 @@ const TeacherDashboard = () => {
           error: (err) => reject(err)
         });
       } else {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-          resolve(json);
-        };
-        reader.onerror = (err) => reject(err);
-        reader.readAsArrayBuffer(file);
+        // Parse Excel file using read-excel-file
+        readXlsxFile(file)
+          .then((rows) => {
+            // First row is headers
+            const headers = rows[0];
+            const data = rows.slice(1).map(row => {
+              const obj = {};
+              headers.forEach((header, index) => {
+                obj[header] = row[index] || '';
+              });
+              return obj;
+            });
+            resolve(data);
+          })
+          .catch((err) => reject(err));
       }
     });
   };
@@ -449,9 +455,14 @@ const TeacherDashboard = () => {
       }
       
       resetForm();
-      fetchAnnouncements();
+      
+      // Wait a moment then fetch to ensure database has saved
+      setTimeout(() => {
+        fetchAnnouncements();
+      }, 500);
     } catch (err) {
-      alert('Failed to save announcement');
+      console.error('Error saving announcement:', err);
+      alert('Failed to save announcement: ' + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
     }
@@ -464,6 +475,14 @@ const TeacherDashboard = () => {
           <div className="flex justify-between h-16 items-center">
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Teacher Portal</h1>
             <div className="flex items-center gap-4">
+              <button 
+                onClick={() => navigate('/history')}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+                title="View Announcement History"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                History
+              </button>
               <button 
                 onClick={() => { resetForm(); setShowForm(!showForm); }}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"

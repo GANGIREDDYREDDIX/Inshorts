@@ -2,26 +2,22 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import API_ENDPOINTS from '../config/api';
 
 const StudentFeed = () => {
   const [announcements, setAnnouncements] = useState([]);
   const [filteredAnnouncements, setFilteredAnnouncements] = useState([]);
-  
-  // FIX 1: Ensure default state matches the first category
   const [selectedCategory, setSelectedCategory] = useState('All'); 
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const navigate = useNavigate();
 
-  // FIX 2: Variable name consistency
   const categories = ['All', 'Academic', 'Administrative/Misc', 'Co-curricular/Sports/Cultural', 'Placement', 'Benefits'];
 
   useEffect(() => {
-    // Replace with your actual API endpoint
     const fetchAnnouncements = async () => {
       try {
-        const res = await axios.get('http://localhost:5001/api/announcements');
+        const res = await axios.get(API_ENDPOINTS.ANNOUNCEMENTS.BASE);
         setAnnouncements(res.data);
-        // Initialize filtered list with all data
         setFilteredAnnouncements(res.data); 
       } catch (err) {
         console.error(err);
@@ -90,13 +86,22 @@ const StudentFeed = () => {
               </div>
 
               {/* Logout Icon */}
-              <button 
-                onClick={handleLogout}
-                className="text-zinc-500 hover:text-white transition-colors"
-                title="Logout"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => navigate('/history')}
+                  className="text-zinc-500 hover:text-white transition-colors"
+                  title="Announcement History"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                </button>
+                <button 
+                  onClick={handleLogout}
+                  className="text-zinc-500 hover:text-white transition-colors"
+                  title="Logout"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -179,12 +184,22 @@ const StudentFeed = () => {
                   </button>
                 ))}
               </div>
-              <button 
-                onClick={handleLogout}
-                className="bg-white/10 hover:bg-white/20 backdrop-blur-md px-5 py-2 rounded-full text-white text-sm transition-all"
-              >
-                Logout
-              </button>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => navigate('/history')}
+                  className="bg-white/10 hover:bg-white/20 backdrop-blur-md px-5 py-2 rounded-full text-white text-sm transition-all flex items-center gap-2"
+                  title="Announcement History"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  History
+                </button>
+                <button 
+                  onClick={handleLogout}
+                  className="bg-white/10 hover:bg-white/20 backdrop-blur-md px-5 py-2 rounded-full text-white text-sm transition-all"
+                >
+                  Logout
+                </button>
+              </div>
             </div>
           </div>
           <div className="h-full w-full overflow-y-scroll snap-y snap-mandatory scroll-smooth no-scrollbar">
@@ -277,7 +292,7 @@ const StudentFeed = () => {
                           return (
                             <div key={att._id} className="flex items-center gap-2">
                               <a
-                                href={`http://localhost:5001${att.fileUrl}`}
+                                href={`${API_ENDPOINTS.BASE_URL}${att.fileUrl}`}
                                 download={att.fileName}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -298,7 +313,7 @@ const StudentFeed = () => {
                               </a>
                               {isImage && (
                                 <a
-                                  href={`http://localhost:5001${att.fileUrl}`}
+                                  href={`${API_ENDPOINTS.BASE_URL}${att.fileUrl}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="px-3 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
