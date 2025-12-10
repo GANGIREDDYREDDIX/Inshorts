@@ -330,29 +330,33 @@ const TeacherDashboard = () => {
                       </div>
                       <p className="text-xs text-gray-400 mt-2">Who should receive this announcement?</p>
                     </div>
+                  </div>
 
-                    <div className="col-span-2 md:col-span-1">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-blue-50 p-6 rounded-xl border border-blue-200">
+                    <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Upload Students (CSV / XLSX)</label>
                       <input type="file" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" onChange={handleStudentsFile} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700" />
                       <p className="text-xs text-gray-400 mt-2">Parsed students: <strong>{studentsList.length}</strong></p>
                     </div>
 
-                    <div className="col-span-2 md:col-span-1">
+                    <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Upload Staff (CSV / XLSX)</label>
                       <input type="file" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" onChange={handleStaffFile} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700" />
                       <p className="text-xs text-gray-400 mt-2">Parsed staff: <strong>{staffList.length}</strong></p>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
-                    <textarea
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none h-32 resize-none bg-gray-50 focus:bg-white"
-                      placeholder="Enter the full details of the announcement..."
-                      required
-                    />
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+                      <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none h-32 resize-none bg-gray-50 focus:bg-white"
+                        placeholder="Enter the full details of the announcement..."
+                        required
+                      />
+                    </div>
                   </div>
 
                   <div>
