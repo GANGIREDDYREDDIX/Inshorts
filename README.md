@@ -1,4 +1,4 @@
-# Inshorts University Announcement Platform 📢
+<!-- # Inshorts University Announcement Platform 📢 -->
 
 A modern MERN stack application for managing university announcements with AI-powered content generation. Teachers can create and manage announcements while students can view them in a beautifully designed feed with category filters.
 
