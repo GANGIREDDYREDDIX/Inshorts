@@ -34,7 +34,7 @@ const TeacherDashboard = () => {
       const res = await axios.get(`http://localhost:5001/api/announcements?authorId=${user.id}`);
       setAnnouncements(res.data);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to fetch announcements:', err.message);
     }
   };
 
@@ -116,6 +116,15 @@ const TeacherDashboard = () => {
   const handleStudentsFile = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
+    
+    // Security: File size validation (1MB limit)
+    const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
+    if (file.size > MAX_FILE_SIZE) {
+      alert('File too large. Maximum size is 1MB for CSV/Excel files.');
+      e.target.value = ''; // Reset input
+      return;
+    }
+    
     try {
       const rows = await parseCsvOrExcel(file);
       const mapped = rows.map(r => ({
@@ -125,14 +134,24 @@ const TeacherDashboard = () => {
       }));
       setStudentsList(mapped.filter(x => x.name || x.regId || x.email));
     } catch (err) {
-      console.error('Failed to parse students file', err);
-      alert('Failed to parse students file');
+      console.error('Failed to parse students file:', err.message);
+      alert('Failed to parse students file. Please check the file format.');
+      e.target.value = ''; // Reset input on error
     }
   };
 
   const handleStaffFile = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
+    
+    // Security: File size validation (1MB limit)
+    const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
+    if (file.size > MAX_FILE_SIZE) {
+      alert('File too large. Maximum size is 1MB for CSV/Excel files.');
+      e.target.value = ''; // Reset input
+      return;
+    }
+    
     try {
       const rows = await parseCsvOrExcel(file);
       const mapped = rows.map(r => ({
@@ -142,14 +161,72 @@ const TeacherDashboard = () => {
       }));
       setStaffList(mapped.filter(x => x.name || x.staffId || x.email));
     } catch (err) {
-      console.error('Failed to parse staff file', err);
-      alert('Failed to parse staff file');
+      console.error('Failed to parse staff file:', err.message);
+      alert('Failed to parse staff file. Please check the file format.');
+      e.target.value = ''; // Reset input on error
     }
   };
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files || []);
-    setSelectedFiles(files);
+    
+    // Validate file count (max 5 files total including already selected)
+    if (selectedFiles.length + files.length > 5) {
+      alert('Maximum 5 files can be selected at once');
+      e.target.value = '';
+      return;
+    }
+    
+    // Validate file sizes
+    const invalidFiles = files.filter(file => file.size > 10 * 1024 * 1024);
+    if (invalidFiles.length > 0) {
+      alert(`File(s) too large: ${invalidFiles.map(f => f.name).join(', ')}\nMaximum size is 10MB per file.`);
+      e.target.value = '';
+      return;
+    }
+    
+    // Append to existing selected files
+    setSelectedFiles([...selectedFiles, ...files]);
+    e.target.value = ''; // Reset input to allow selecting more files
+  };
+
+  const handleRemoveSelectedFile = (index) => {
+    setSelectedFiles(selectedFiles.filter((_, idx) => idx !== index));
+  };
+
+  const getFileIcon = (fileName) => {
+    const ext = fileName.split('.').pop().toLowerCase();
+    const iconMap = {
+      pdf: '📕',
+      doc: '📘', docx: '📘',
+      xls: '📗', xlsx: '📗',
+      ppt: '📙', pptx: '📙',
+      txt: '📄',
+      jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️',
+      zip: '📦'
+    };
+    return iconMap[ext] || '📎';
+  };
+
+  const handlePreviewFile = (file) => {
+    // Create preview for images
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const previewWindow = window.open('', '_blank');
+        previewWindow.document.write(`
+          <html>
+            <head><title>Preview: ${file.name}</title></head>
+            <body style="margin:0; display:flex; justify-content:center; align-items:center; min-height:100vh; background:#000;">
+              <img src="${e.target.result}" style="max-width:100%; max-height:100vh;" />
+            </body>
+          </html>
+        `);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      alert(`Preview not available for ${file.type}. File will be available after upload.`);
+    }
   };
 
   const handleFileUpload = async (announcementId) => {
@@ -193,8 +270,9 @@ const TeacherDashboard = () => {
       );
       setAttachments(res.data.announcement.attachments || []);
       fetchAnnouncements();
-      alert('File deleted');
+      alert('File deleted successfully');
     } catch (err) {
+      console.error('Delete attachment error:', err.message);
       alert('Failed to delete file');
     }
   };
@@ -204,8 +282,10 @@ const TeacherDashboard = () => {
     try {
       await axios.delete(`http://localhost:5001/api/announcements/${id}`);
       fetchAnnouncements();
+      alert('Announcement deleted successfully');
     } catch (err) {
-      alert('Failed to delete');
+      console.error('Delete announcement error:', err.message);
+      alert('Failed to delete announcement');
     }
   };
 
@@ -219,25 +299,24 @@ const TeacherDashboard = () => {
     if (!selectedAnnouncement) return;
     setImageLoading(true);
     try {
-      console.log('Regenerating image for:', selectedAnnouncement._id);
-      console.log('Custom URL:', customImageUrl.trim());
       const res = await axios.post(`http://localhost:5001/api/announcements/${selectedAnnouncement._id}/regenerate-image`, {
         customImageUrl: customImageUrl.trim()
       });
-      console.log('Response:', res.data);
+      
       // Update announcements list
       setAnnouncements(announcements.map(a => a._id === res.data._id ? res.data : a));
       // Update selected announcement to show new image in modal
       setSelectedAnnouncement(res.data);
       alert(customImageUrl.trim() ? 'Image updated successfully!' : 'New image generated successfully!');
+      
       // Close modal after a brief delay to show the new image
       setTimeout(() => {
         setShowImageModal(false);
       }, 1000);
     } catch (err) {
-      console.error('Error details:', err.response?.data || err.message);
-      const errorMsg = err.response?.data?.message || err.message || 'Unknown error';
-      alert(`Failed to update image: ${errorMsg}`);
+      console.error('Image regeneration error:', err.message);
+      const errorMsg = err.response?.data?.message || 'Failed to update image';
+      alert(errorMsg);
     } finally {
       setImageLoading(false);
     }
@@ -259,16 +338,27 @@ const TeacherDashboard = () => {
         students: studentsList,
         staff: staffList
       };
+      
+      let announcementId = editingId;
+      
       if (editingId) {
         await axios.put(`http://localhost:5001/api/announcements/${editingId}`, payload);
         alert('Announcement Updated!');
       } else {
-        await axios.post('http://localhost:5001/api/announcements', { 
+        const res = await axios.post('http://localhost:5001/api/announcements', { 
           ...payload,
           authorId: user.id
         });
+        announcementId = res.data._id;
+        
+        // Upload files if any were selected during creation
+        if (selectedFiles.length > 0) {
+          await handleFileUpload(announcementId);
+        }
+        
         alert('Announcement Posted Successfully!');
       }
+      
       resetForm();
       fetchAnnouncements();
     } catch (err) {
@@ -411,61 +501,156 @@ const TeacherDashboard = () => {
                   </div>
 
                   {/* File Attachments Section */}
-                  {editingId && (
-                    <div className="border-t border-gray-200 pt-6">
-                      <label className="block text-sm font-semibold text-gray-700 mb-3">📎 File Attachments</label>
-                      
-                      {/* Existing Attachments */}
-                      {attachments.length > 0 && (
-                        <div className="mb-4 space-y-2">
-                          {attachments.map((att) => (
-                            <div key={att._id} className="flex items-center justify-between bg-gray-50 px-4 py-2 rounded-lg">
-                              <div className="flex items-center gap-2">
-                                <span className="text-blue-600">📄</span>
-                                <span className="text-sm font-medium">{att.fileName}</span>
-                                <span className="text-xs text-gray-400">
-                                  ({(att.fileSize / 1024).toFixed(1)} KB)
-                                </span>
+                  <div className="border-t border-gray-200 pt-6">
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">📎 File Attachments</label>
+                    
+                    {/* Existing Attachments (for editing) */}
+                    {editingId && attachments.length > 0 && (
+                        <div className="mb-4">
+                          <div className="mb-2">
+                            <span className="text-sm font-semibold text-gray-700">
+                              Uploaded Attachments ({attachments.length})
+                            </span>
+                          </div>
+                          <div className="space-y-2">
+                            {attachments.map((att) => (
+                              <div key={att._id} className="flex items-center justify-between bg-green-50 px-4 py-2 rounded-lg border border-green-200 hover:bg-green-100 transition-colors">
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  <span className="text-2xl">{getFileIcon(att.fileName)}</span>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-gray-800 truncate">{att.fileName}</p>
+                                    <p className="text-xs text-gray-500">
+                                      {(att.fileSize / 1024).toFixed(1)} KB • Uploaded {new Date(att.uploadedAt).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 ml-2">
+                                  <a
+                                    href={`http://localhost:5001${att.fileUrl}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                    title="View/Download file"
+                                  >
+                                    👁️ View
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteAttachment(editingId, att._id)}
+                                    className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                                    title="Delete attachment"
+                                  >
+                                    🗑️ Delete
+                                  </button>
+                                </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteAttachment(editingId, att._id)}
-                                className="text-red-500 hover:text-red-700 text-sm"
-                              >
-                                🗑️ Delete
-                              </button>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       )}
 
-                      {/* Upload New Files */}
-                      <div className="flex gap-2">
-                        <input
-                          type="file"
-                          multiple
-                          onChange={handleFileSelect}
-                          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.gif,.zip"
-                          className="flex-1 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleFileUpload(editingId)}
-                          disabled={uploadingFiles || selectedFiles.length === 0}
-                          className={`px-4 py-2 rounded-lg font-medium text-sm ${
-                            uploadingFiles || selectedFiles.length === 0
-                              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                              : 'bg-green-600 text-white hover:bg-green-700'
-                          }`}
-                        >
-                          {uploadingFiles ? 'Uploading...' : `Upload ${selectedFiles.length > 0 ? `(${selectedFiles.length})` : ''}`}
-                        </button>
+                      {/* Selected Files Preview (for both create and edit) */}
+                      {selectedFiles.length > 0 && (
+                        <div className="mb-4">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-semibold text-gray-700">
+                              Selected Files ({selectedFiles.length}/5)
+                            </span>
+                            {!editingId && (
+                              <span className="text-xs text-blue-600 font-medium">Ready to upload</span>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            {Array.from(selectedFiles).map((file, idx) => (
+                              <div key={idx} className="flex items-center justify-between bg-blue-50 px-4 py-2 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors">
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  <span className="text-2xl">{getFileIcon(file.name)}</span>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-gray-800 truncate">{file.name}</p>
+                                    <p className="text-xs text-gray-500">
+                                      {(file.size / 1024).toFixed(1)} KB • {file.type || 'Unknown type'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 ml-2">
+                                  {file.type.startsWith('image/') && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePreviewFile(file)}
+                                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                      title="Preview image"
+                                    >
+                                      👁️ Preview
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveSelectedFile(idx)}
+                                    className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                                    title="Remove file"
+                                  >
+                                    🗑️ Remove
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* File Selection and Upload */}
+                      <div className="space-y-3">
+                        <div className="flex gap-2">
+                          <label className="flex-1 cursor-pointer">
+                            <div className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-green-50 to-blue-50 border-2 border-dashed border-green-300 rounded-lg hover:border-green-500 hover:from-green-100 hover:to-blue-100 transition-all">
+                              <span className="text-2xl">📎</span>
+                              <span className="text-sm font-medium text-gray-700">
+                                {selectedFiles.length > 0 
+                                  ? `Add More Files (${5 - selectedFiles.length} remaining)`
+                                  : 'Choose Files or Drag & Drop'
+                                }
+                              </span>
+                            </div>
+                            <input
+                              type="file"
+                              multiple
+                              onChange={handleFileSelect}
+                              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.gif,.zip"
+                              className="hidden"
+                              disabled={selectedFiles.length >= 5}
+                            />
+                          </label>
+                          {editingId && selectedFiles.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleFileUpload(editingId)}
+                              disabled={uploadingFiles}
+                              className={`px-6 py-3 rounded-lg font-medium text-sm whitespace-nowrap ${
+                                uploadingFiles
+                                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                  : 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
+                              } transition-all`}
+                            >
+                              {uploadingFiles ? '⏳ Uploading...' : `📤 Upload ${selectedFiles.length} File${selectedFiles.length > 1 ? 's' : ''}`}
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-start gap-2 text-xs text-gray-500">
+                          <span>ℹ️</span>
+                          <div>
+                            <p className="font-medium mb-1">
+                              {editingId 
+                                ? 'Upload files to this announcement'
+                                : 'Files will be uploaded when you post the announcement'
+                              }
+                            </p>
+                            <p>• Accepted: PDF, Word, Excel, PowerPoint, Text, Images, ZIP</p>
+                            <p>• Maximum: 10MB per file, up to 5 files total</p>
+                            <p>• You can preview images before uploading</p>
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-xs text-gray-400 mt-2">
-                        Accepted: PDF, Word, Excel, PowerPoint, Text, Images, ZIP (Max 10MB per file, up to 5 files)
-                      </p>
                     </div>
-                  )}
 
                   <div className="flex justify-end pt-4">
                     <button

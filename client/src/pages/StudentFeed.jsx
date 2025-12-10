@@ -260,32 +260,56 @@ const StudentFeed = () => {
                   {selectedAnnouncement.attachments && selectedAnnouncement.attachments.length > 0 && (
                     <div className="mt-6 pt-6 border-t border-zinc-800">
                       <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
-                        📎 Attachments
+                        📎 Attachments ({selectedAnnouncement.attachments.length})
                       </h3>
                       <div className="space-y-2">
-                        {selectedAnnouncement.attachments.map((att) => (
-                          <a
-                            key={att._id}
-                            href={`http://localhost:5001${att.fileUrl}`}
-                            download={att.fileName}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-between bg-zinc-800 hover:bg-zinc-700 px-4 py-3 rounded-lg transition-colors group"
-                          >
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                              <span className="text-2xl">📄</span>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-white font-medium truncate">{att.fileName}</p>
-                                <p className="text-zinc-400 text-xs">
-                                  {(att.fileSize / 1024).toFixed(1)} KB • {new Date(att.uploadedAt).toLocaleDateString()}
-                                </p>
-                              </div>
+                        {selectedAnnouncement.attachments.map((att) => {
+                          const ext = att.fileName.split('.').pop().toLowerCase();
+                          const iconMap = {
+                            pdf: '📕', doc: '📘', docx: '📘',
+                            xls: '📗', xlsx: '📗', ppt: '📙', pptx: '📙',
+                            txt: '📄', jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️',
+                            zip: '📦'
+                          };
+                          const icon = iconMap[ext] || '📎';
+                          const isImage = ['jpg', 'jpeg', 'png', 'gif'].includes(ext);
+                          
+                          return (
+                            <div key={att._id} className="flex items-center gap-2">
+                              <a
+                                href={`http://localhost:5001${att.fileUrl}`}
+                                download={att.fileName}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-1 flex items-center justify-between bg-zinc-800 hover:bg-zinc-700 px-4 py-3 rounded-lg transition-colors group"
+                              >
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  <span className="text-2xl">{icon}</span>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-white font-medium truncate">{att.fileName}</p>
+                                    <p className="text-zinc-400 text-xs">
+                                      {(att.fileSize / 1024).toFixed(1)} KB • {new Date(att.uploadedAt).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                </div>
+                                <svg className="w-5 h-5 text-blue-400 group-hover:text-blue-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                </svg>
+                              </a>
+                              {isImage && (
+                                <a
+                                  href={`http://localhost:5001${att.fileUrl}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                                  title="Preview image"
+                                >
+                                  👁️
+                                </a>
+                              )}
                             </div>
-                            <svg className="w-5 h-5 text-blue-400 group-hover:text-blue-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                            </svg>
-                          </a>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}

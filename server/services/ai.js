@@ -45,26 +45,23 @@ const generateFallbackSummary = (text) => {
 };
 
 const generateImage = async (title, tags = []) => {
-  console.log("Generating image for:", title, "with tags:", tags);
-  
   // Try Unsplash first (free, no key required)
   try {
     const keywords = tags.length > 0 ? tags.join(" ") : title;
     const searchQuery = encodeURIComponent(keywords);
-    const randomPage = Math.floor(Math.random() * 3) + 1; // Random page 1-3 for variety
     
-    console.log("Fetching from Unsplash with query:", keywords);
     const response = await fetch(
       `https://source.unsplash.com/1600x900/?${searchQuery}`,
       { redirect: 'follow' }
     );
     
     if (response.ok && response.url) {
-      console.log("Unsplash image fetched successfully:", response.url);
       return response.url;
     }
   } catch (error) {
-    console.error("Unsplash Error:", error);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error("Unsplash Error:", error.message);
+    }
   }
   
   // Try Pexels API if available
@@ -74,7 +71,6 @@ const generateImage = async (title, tags = []) => {
       const searchQuery = encodeURIComponent(keywords);
       const randomPage = Math.floor(Math.random() * 5) + 1; // Get random page for variety
       
-      console.log("Fetching from Pexels with query:", keywords);
       const response = await fetch(
         `https://api.pexels.com/v1/search?query=${searchQuery}&per_page=1&page=${randomPage}&orientation=landscape`,
         {
@@ -87,17 +83,17 @@ const generateImage = async (title, tags = []) => {
       if (response.ok) {
         const data = await response.json();
         if (data.photos && data.photos.length > 0) {
-          console.log("Pexels image fetched successfully");
           return data.photos[0].src.large2x;
         }
       }
     } catch (error) {
-      console.error("Pexels API Error:", error);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error("Pexels API Error:", error.message);
+      }
     }
   }
   
   // Fallback: Use Picsum for random high-quality photos
-  console.log("Using Picsum fallback");
   const seed = encodeURIComponent(title + Date.now()); // Add timestamp for different images
   return `https://picsum.photos/seed/${seed}/1600/900`;
 };

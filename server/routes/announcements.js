@@ -4,6 +4,7 @@ const Announcement = require('../models/Announcement');
 const { generateSummary, generateImage } = require('../services/ai');
 const upload = require('../middleware/upload');
 const path = require('path');
+const { sanitizeInput } = require('../utils/security');
 
 // Get all announcements (optional filter by authorId)
 router.get('/', async (req, res) => {
@@ -23,8 +24,24 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   const { title, description, tags, authorId, category, summary: manualSummary, audience, students, staff } = req.body;
   
+  // Input validation
   if (!title || !description || !authorId) {
     return res.status(400).json({ message: 'Title, description, and authorId are required' });
+  }
+
+  // Sanitize text inputs
+  if (!sanitizeInput(title) || !sanitizeInput(description)) {
+    return res.status(400).json({ message: 'Invalid input format' });
+  }
+
+  // Validate title length
+  if (title.length > 200) {
+    return res.status(400).json({ message: 'Title must be less than 200 characters' });
+  }
+
+  // Validate description length
+  if (description.length > 5000) {
+    return res.status(400).json({ message: 'Description must be less than 5000 characters' });
   }
 
   try {
@@ -100,40 +117,37 @@ router.put('/:id', async (req, res) => {
 // Regenerate image for announcement
 router.post('/:id/regenerate-image', async (req, res) => {
   const { customImageUrl } = req.body;
-  console.log('Regenerate image request for ID:', req.params.id);
-  console.log('Custom URL provided:', customImageUrl);
   
   try {
     const announcement = await Announcement.findById(req.params.id);
     if (!announcement) {
-      console.log('Announcement not found:', req.params.id);
       return res.status(404).json({ message: 'Announcement not found' });
     }
 
     // If custom URL provided, use it; otherwise regenerate with AI
     let imageUrl;
     if (customImageUrl && customImageUrl.trim() !== '') {
-      console.log('Using custom image URL');
       imageUrl = customImageUrl.trim();
     } else {
-      console.log('Generating new image with AI for:', announcement.title);
       imageUrl = await generateImage(announcement.title, announcement.tags);
     }
 
-    console.log('New image URL:', imageUrl);
     announcement.imageUrl = imageUrl;
     const updatedAnnouncement = await announcement.save();
-    console.log('Image updated successfully');
     res.json(updatedAnnouncement);
   } catch (err) {
-    console.error('Error regenerating image:', err);
-    res.status(500).json({ message: err.message });
+    console.error('Error regenerating image:', err.message);
+    res.status(500).json({ message: 'Failed to regenerate image' });
   }
 });
 
 // Upload file attachments
 router.post('/:id/upload', upload.array('files', 5), async (req, res) => {
   try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: 'No files provided' });
+    }
+
     const announcement = await Announcement.findById(req.params.id);
     if (!announcement) {
       return res.status(404).json({ message: 'Announcement not found' });
@@ -158,8 +172,8 @@ router.post('/:id/upload', upload.array('files', 5), async (req, res) => {
       announcement 
     });
   } catch (err) {
-    console.error('Upload error:', err);
-    res.status(500).json({ message: err.message });
+    console.error('File upload error:', err.message);
+    res.status(500).json({ message: 'Failed to upload files' });
   }
 });
 
