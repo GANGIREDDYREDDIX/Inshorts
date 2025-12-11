@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
 import readXlsxFile from 'read-excel-file';
+import API_ENDPOINTS from '../config/api';
 
 const TeacherDashboard = () => {
   const [announcements, setAnnouncements] = useState([]);
@@ -29,7 +30,7 @@ const TeacherDashboard = () => {
 
   const fetchAnnouncements = async () => {
     try {
-      const res = await axios.get(`http://localhost:5001/api/announcements?authorId=${user.id}`);
+      const res = await axios.get(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}?authorId=${user.id}`);
       setAnnouncements(res.data);
     } catch (err) {
       console.error(err);
@@ -191,7 +192,7 @@ const TeacherDashboard = () => {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this announcement?')) return;
     try {
-      await axios.delete(`http://localhost:5001/api/announcements/${id}`);
+      await axios.delete(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}/${id}`);
       fetchAnnouncements();
     } catch (err) {
       alert('Failed to delete');
@@ -210,7 +211,7 @@ const TeacherDashboard = () => {
     try {
       console.log('Regenerating image for:', selectedAnnouncement._id);
       console.log('Custom URL:', customImageUrl.trim());
-      const res = await axios.post(`http://localhost:5001/api/announcements/${selectedAnnouncement._id}/regenerate-image`, {
+      const res = await axios.post(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}/${selectedAnnouncement._id}/regenerate-image`, {
         customImageUrl: customImageUrl.trim()
       });
       console.log('Response:', res.data);
@@ -254,13 +255,13 @@ const TeacherDashboard = () => {
       });
       
       if (editingId) {
-        await axios.put(`http://localhost:5001/api/announcements/${editingId}`, formData, {
+        await axios.put(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}/${editingId}`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
         alert('Announcement Updated!');
       } else {
         formData.append('authorId', user.id);
-        await axios.post('http://localhost:5001/api/announcements', formData, {
+        await axios.post(API_ENDPOINTS.ANNOUNCEMENTS.BASE, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
         alert('Announcement Posted Successfully!');
