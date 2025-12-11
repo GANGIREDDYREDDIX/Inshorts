@@ -22,40 +22,47 @@ router.get('/', async (req, res) => {
 
 // Create announcement (Teacher only)
 router.post('/', upload.array('files'), async (req, res) => {
-  const { title, description, tags, authorId, category, summary: manualSummary, audience, students, staff } = req.body;
-  
-  // Input validation
-  if (!title || !description || !authorId) {
-    return res.status(400).json({ message: 'Title, description, and authorId are required' });
-  }
-
-  // Sanitize text inputs
-  if (!sanitizeInput(title) || !sanitizeInput(description)) {
-    return res.status(400).json({ message: 'Invalid input format' });
-  }
-
-  // Validate title length
-  if (title.length > 200) {
-    return res.status(400).json({ message: 'Title must be less than 200 characters' });
-  }
-
-  // Validate description length
-  if (description.length > 5000) {
-    return res.status(400).json({ message: 'Description must be less than 5000 characters' });
-  }
-
   try {
+    const { title, description, tags, authorId, category, summary: manualSummary, audience, students, staff } = req.body;
+    
+    // Input validation
+    if (!title || !description || !authorId) {
+      return res.status(400).json({ message: 'Title, description, and authorId are required' });
+    }
+
+    // Sanitize text inputs
+    if (!sanitizeInput(title) || !sanitizeInput(description)) {
+      return res.status(400).json({ message: 'Invalid input format' });
+    }
+
+    // Validate title length
+    if (title.length > 200) {
+      return res.status(400).json({ message: 'Title must be less than 200 characters' });
+    }
+
+    // Validate description length
+    if (description.length > 5000) {
+      return res.status(400).json({ message: 'Description must be less than 5000 characters' });
+    }
+
     // Parse JSON fields from FormData
     let parsedTags = [];
     let parsedStudents = [];
     let parsedStaff = [];
 
     try {
-      if (tags && typeof tags === 'string') parsedTags = JSON.parse(tags);
-      if (students && typeof students === 'string') parsedStudents = JSON.parse(students);
-      if (staff && typeof staff === 'string') parsedStaff = JSON.parse(staff);
+      if (tags && typeof tags === 'string') {
+        parsedTags = JSON.parse(tags);
+      }
+      if (students && typeof students === 'string') {
+        parsedStudents = JSON.parse(students);
+      }
+      if (staff && typeof staff === 'string') {
+        parsedStaff = JSON.parse(staff);
+      }
     } catch (parseErr) {
       console.error('Error parsing JSON fields:', parseErr);
+      // Continue with empty arrays if parsing fails
     }
 
     // Generate AI content
@@ -76,12 +83,12 @@ router.post('/', upload.array('files'), async (req, res) => {
       originalDescription: description,
       summary,
       imageUrl,
-      tags: parsedTags,
+      tags: parsedTags || [],
       category: category || 'All',
       audience: audience || 'Both',
-      students: parsedStudents,
-      staff: parsedStaff,
-      attachments,
+      students: Array.isArray(parsedStudents) ? parsedStudents : [],
+      staff: Array.isArray(parsedStaff) ? parsedStaff : [],
+      attachments: attachments || [],
       authorId
     });
 
@@ -89,7 +96,7 @@ router.post('/', upload.array('files'), async (req, res) => {
     res.status(201).json(savedAnnouncement);
   } catch (err) {
     console.error('Error creating announcement:', err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: err.message || 'Failed to create announcement' });
   }
 });
 

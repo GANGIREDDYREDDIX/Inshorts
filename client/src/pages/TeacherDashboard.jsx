@@ -268,8 +268,8 @@ const TeacherDashboard = () => {
       resetForm();
       fetchAnnouncements();
     } catch (err) {
-      console.error(err);
-      alert('Failed to save announcement');
+      console.error('Error details:', err.response?.data || err.message);
+      alert('Failed to save announcement: ' + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
     }
