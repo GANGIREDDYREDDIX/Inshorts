@@ -192,14 +192,14 @@ const StudentFeed = () => {
                 </div>
                 <button 
                   onClick={() => navigate('/history')}
-                  className="px-4 py-1.5 rounded-full text-xs font-medium transition-all text-zinc-400 hover:text-white hover:bg-white/10"
+                  className="px-4 py-1.5 rounded-full text-xs font-medium transition-all text-zinc-400 hover:text-white hover:bg-white/10 bg-black/40 backdrop-blur-xl border border-white/10"
                 >
                   History
                 </button>
               </div>
               <button 
                 onClick={handleLogout}
-                className="bg-white/10 hover:bg-white/20 backdrop-blur-md px-5 py-2 rounded-full text-white text-sm transition-all"
+                className="bg-white/10 hover:bg-white/20 backdrop-blur-xl px-5 py-2 rounded-full text-white text-sm transition-all border border-white/10"
               >
                 Logout
               </button>
