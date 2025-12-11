@@ -21,7 +21,7 @@ router.get('/', async (req, res) => {
 });
 
 // Create announcement (Teacher only)
-router.post('/', async (req, res) => {
+router.post('/', upload.array('files'), async (req, res) => {
   const { title, description, tags, authorId, category, summary: manualSummary, audience, students, staff } = req.body;
   
   // Input validation
@@ -45,33 +45,56 @@ router.post('/', async (req, res) => {
   }
 
   try {
+    // Parse JSON fields from FormData
+    let parsedTags = [];
+    let parsedStudents = [];
+    let parsedStaff = [];
+
+    try {
+      if (tags && typeof tags === 'string') parsedTags = JSON.parse(tags);
+      if (students && typeof students === 'string') parsedStudents = JSON.parse(students);
+      if (staff && typeof staff === 'string') parsedStaff = JSON.parse(staff);
+    } catch (parseErr) {
+      console.error('Error parsing JSON fields:', parseErr);
+    }
+
     // Generate AI content
     // Use manual summary if provided, otherwise generate
     const summary = manualSummary || await generateSummary(description);
-    const imageUrl = await generateImage(title, tags);
+    const imageUrl = await generateImage(title, parsedTags);
+
+    // Process uploaded files
+    const attachments = req.files ? req.files.map(file => ({
+      fileName: file.originalname,
+      fileUrl: `/uploads/${file.filename}`,
+      fileSize: file.size,
+      mimeType: file.mimetype
+    })) : [];
 
     const newAnnouncement = new Announcement({
       title,
       originalDescription: description,
       summary,
       imageUrl,
-      tags,
+      tags: parsedTags,
       category: category || 'All',
       audience: audience || 'Both',
-      students: Array.isArray(students) ? students : [],
-      staff: Array.isArray(staff) ? staff : [],
+      students: parsedStudents,
+      staff: parsedStaff,
+      attachments,
       authorId
     });
 
     const savedAnnouncement = await newAnnouncement.save();
     res.status(201).json(savedAnnouncement);
   } catch (err) {
+    console.error('Error creating announcement:', err);
     res.status(500).json({ message: err.message });
   }
 });
 
 // Update announcement
-router.put('/:id', async (req, res) => {
+router.put('/:id', upload.array('files'), async (req, res) => {
   const { title, description, tags, category, summary: manualSummary, audience, students, staff } = req.body;
   try {
     const announcement = await Announcement.findById(req.params.id);
@@ -79,6 +102,24 @@ router.put('/:id', async (req, res) => {
 
     let summary = announcement.summary;
     let imageUrl = announcement.imageUrl;
+
+    // Parse JSON fields from FormData
+    let parsedTags = announcement.tags;
+    let parsedStudents = announcement.students;
+    let parsedStaff = announcement.staff;
+
+    try {
+      if (tags && typeof tags === 'string') parsedTags = JSON.parse(tags);
+      else if (tags) parsedTags = tags;
+      
+      if (students && typeof students === 'string') parsedStudents = JSON.parse(students);
+      else if (students) parsedStudents = students;
+      
+      if (staff && typeof staff === 'string') parsedStaff = JSON.parse(staff);
+      else if (staff) parsedStaff = staff;
+    } catch (parseErr) {
+      console.error('Error parsing JSON fields:', parseErr);
+    }
 
     // Regenerate summary if description changed AND no manual summary provided
     // If manual summary is provided AND it's different from the old one, use it.
@@ -93,23 +134,35 @@ router.put('/:id', async (req, res) => {
 
     // Regenerate image if title or tags changed
     // Note: We always regenerate image if tags are provided, or if title changed
-    if ((tags && JSON.stringify(tags) !== JSON.stringify(announcement.tags)) || (title && title !== announcement.title)) {
-      imageUrl = await generateImage(title || announcement.title, tags || announcement.tags);
+    if ((parsedTags && JSON.stringify(parsedTags) !== JSON.stringify(announcement.tags)) || (title && title !== announcement.title)) {
+      imageUrl = await generateImage(title || announcement.title, parsedTags || announcement.tags);
+    }
+
+    // Handle new file uploads
+    if (req.files && req.files.length > 0) {
+      const newAttachments = req.files.map(file => ({
+        fileName: file.originalname,
+        fileUrl: `/uploads/${file.filename}`,
+        fileSize: file.size,
+        mimeType: file.mimetype
+      }));
+      announcement.attachments = newAttachments;
     }
 
     announcement.title = title || announcement.title;
     announcement.originalDescription = description || announcement.originalDescription;
-    announcement.tags = tags || announcement.tags;
+    announcement.tags = parsedTags;
     announcement.category = category || announcement.category;
     announcement.audience = audience || announcement.audience;
-    announcement.students = Array.isArray(students) ? students : announcement.students;
-    announcement.staff = Array.isArray(staff) ? staff : announcement.staff;
+    announcement.students = parsedStudents;
+    announcement.staff = parsedStaff;
     announcement.summary = summary;
     announcement.imageUrl = imageUrl;
 
     const updatedAnnouncement = await announcement.save();
     res.json(updatedAnnouncement);
   } catch (err) {
+    console.error('Error updating announcement:', err);
     res.status(500).json({ message: err.message });
   }
 });
