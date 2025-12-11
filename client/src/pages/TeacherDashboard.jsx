@@ -81,6 +81,19 @@ const TeacherDashboard = () => {
     setAudience(item.audience || 'Both');
     setStudentsList(item.students || []);
     setStaffList(item.staff || []);
+    // Load existing attachments
+    if (item.attachments && item.attachments.length > 0) {
+      const existingAttachments = item.attachments.map(att => ({
+        id: att._id || Date.now() + Math.random(),
+        name: att.fileName,
+        size: att.fileSize,
+        fileUrl: att.fileUrl,
+        isExisting: true
+      }));
+      setAttachments(existingAttachments);
+    } else {
+      setAttachments([]);
+    }
     setEditingId(item._id);
     setShowForm(true);
   };
@@ -249,9 +262,12 @@ const TeacherDashboard = () => {
       formData.append('students', JSON.stringify(studentsList));
       formData.append('staff', JSON.stringify(staffList));
       
-      // Add files
-      attachments.forEach(att => {
-        formData.append('files', att.file);
+      // Add only new files (not existing ones)
+      const newAttachments = attachments.filter(att => !att.isExisting);
+      newAttachments.forEach(att => {
+        if (att.file) {
+          formData.append('files', att.file);
+        }
       });
       
       if (editingId) {
@@ -422,14 +438,23 @@ const TeacherDashboard = () => {
 
                     {attachments.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-sm font-medium text-gray-600 mb-3">Selected files: {attachments.length}</p>
+                        <p className="text-sm font-medium text-gray-600 mb-3">
+                          {editingId ? `Files: ${attachments.length}` : `Selected files: ${attachments.length}`}
+                        </p>
                         {attachments.map((att) => (
-                          <div key={att.id} className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 hover:border-green-300 transition-colors">
+                          <div key={att.id} className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                            att.isExisting 
+                              ? 'bg-blue-50 border-blue-200 hover:border-blue-300' 
+                              : 'bg-white border-gray-200 hover:border-green-300'
+                          }`}>
                             <div className="flex items-center gap-3">
                               <span className="text-2xl">{getFileIcon(att.name)}</span>
                               <div>
                                 <p className="font-medium text-gray-900 text-sm truncate">{att.name}</p>
-                                <p className="text-xs text-gray-500">{formatFileSize(att.size)}</p>
+                                <p className="text-xs text-gray-500">
+                                  {formatFileSize(att.size)}
+                                  {att.isExisting && <span className="ml-2 text-blue-600 font-semibold">(existing)</span>}
+                                </p>
                               </div>
                             </div>
                             <button
