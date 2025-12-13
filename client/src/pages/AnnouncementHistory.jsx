@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import API_ENDPOINTS from '../config/api';
 
 const AnnouncementHistory = () => {
@@ -28,7 +28,7 @@ const AnnouncementHistory = () => {
     };
     fetchAnnouncements();
   }, []);
-
+  
   useEffect(() => {
     let filtered = announcements;
 
@@ -67,26 +67,30 @@ const AnnouncementHistory = () => {
     }
 
     // Apply sorting
-    const sorted = [...filtered].sort((a, b) => {
+  const sorted = [...filtered].sort((a, b) => {
       switch (sortBy) {
         case 'Latest First':
           return new Date(b.createdAt) - new Date(a.createdAt);
         case 'Oldest First':
           return new Date(a.createdAt) - new Date(b.createdAt);
-        case 'Title A-Z':
+        case 'Title A-Z': {
           const titleA = (a.title || '').toLowerCase().trim();
           const titleB = (b.title || '').toLowerCase().trim();
           return titleA.localeCompare(titleB);
-        case 'Title Z-A':
+        }
+        case 'Title Z-A': {
           const titleA_ZA = (a.title || '').toLowerCase().trim();
           const titleB_ZA = (b.title || '').toLowerCase().trim();
           return titleB_ZA.localeCompare(titleA_ZA);
+        }
         default:
           return 0;
       }
     });
 
-    setFilteredAnnouncements(sorted);
+    // setting state in effects is intentional here (we're syncing filtered data)
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  setFilteredAnnouncements(sorted);
   }, [searchQuery, searchBy, sortBy, announcements, selectedDate]);
 
   const handleLogout = () => {
@@ -133,7 +137,7 @@ const AnnouncementHistory = () => {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Search and Filter Section */}
-        <motion.div
+  <Motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="bg-white rounded-xl shadow-md p-6 mb-8 border border-slate-200"
@@ -224,14 +228,14 @@ const AnnouncementHistory = () => {
               <span className="font-semibold text-slate-900">{filteredAnnouncements.length}</span> announcement(s) found
             </p>
           </div>
-        </motion.div>
+  </Motion.div>
 
         {/* Announcements List */}
         <div className="space-y-4">
           <AnimatePresence>
             {filteredAnnouncements.length > 0 ? (
               filteredAnnouncements.map((announcement, index) => (
-                <motion.div
+                <Motion.div
                   key={announcement._id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -283,10 +287,10 @@ const AnnouncementHistory = () => {
                       </span>
                     </div>
                   </div>
-                </motion.div>
+                </Motion.div>
               ))
             ) : (
-              <motion.div
+              <Motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="text-center py-16"
@@ -294,7 +298,7 @@ const AnnouncementHistory = () => {
                 <div className="inline-block text-5xl mb-4">🔍</div>
                 <h3 className="text-xl font-semibold text-slate-900 mb-2">No announcements found</h3>
                 <p className="text-slate-600">Try adjusting your search or filter criteria</p>
-              </motion.div>
+              </Motion.div>
             )}
           </AnimatePresence>
         </div>
@@ -303,14 +307,14 @@ const AnnouncementHistory = () => {
       {/* Detail Modal */}
       <AnimatePresence>
         {selectedAnnouncement && (
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setSelectedAnnouncement(null)}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           >
-            <motion.div
+            <Motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
@@ -454,8 +458,8 @@ const AnnouncementHistory = () => {
                   Close
                 </button>
               </div>
-            </motion.div>
-          </motion.div>
+            </Motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
     </div>

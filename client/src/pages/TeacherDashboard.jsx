@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
 import readXlsxFile from 'read-excel-file';
 import API_ENDPOINTS from '../config/api';
@@ -28,18 +28,18 @@ const TeacherDashboard = () => {
 
   const user = JSON.parse(localStorage.getItem('user'));
 
-  const fetchAnnouncements = async () => {
+  const fetchAnnouncements = useCallback(async () => {
     try {
       const res = await axios.get(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}?authorId=${user.id}`);
       setAnnouncements(res.data);
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [user.id]);
 
   useEffect(() => {
     fetchAnnouncements();
-  }, []);
+  }, [fetchAnnouncements]);
 
   const handleLogout = () => {
     localStorage.removeItem('user');
@@ -207,7 +207,8 @@ const TeacherDashboard = () => {
     try {
       await axios.delete(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}/${id}`);
       fetchAnnouncements();
-    } catch (err) {
+    } catch (error) {
+      console.error('Delete failed:', error);
       alert('Failed to delete');
     }
   };
@@ -322,7 +323,7 @@ const TeacherDashboard = () => {
         
         <AnimatePresence>
           {showForm && (
-            <motion.div 
+            <Motion.div 
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -492,13 +493,13 @@ const TeacherDashboard = () => {
                   </div>
                 </form>
               </div>
-            </motion.div>
+            </Motion.div>
           )}
         </AnimatePresence>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {announcements.map((item) => (
-            <motion.div 
+            <Motion.div 
               layout
               key={item._id} 
               className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
@@ -555,7 +556,7 @@ const TeacherDashboard = () => {
                   </span>
                 </div>
               </div>
-            </motion.div>
+            </Motion.div>
           ))}
         </div>
 
@@ -570,14 +571,14 @@ const TeacherDashboard = () => {
       {/* Image Management Modal */}
       <AnimatePresence>
         {showImageModal && selectedAnnouncement && (
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
             onClick={() => setShowImageModal(false)}
           >
-            <motion.div
+            <Motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
@@ -661,8 +662,8 @@ const TeacherDashboard = () => {
                   </button>
                 </div>
               </div>
-            </motion.div>
-          </motion.div>
+            </Motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
     </div>

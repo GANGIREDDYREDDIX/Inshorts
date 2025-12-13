@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import API_ENDPOINTS from '../config/api';
 
 const StudentFeed = () => {
@@ -33,11 +33,14 @@ const StudentFeed = () => {
 
   // FIX 3: Fixed Filter Logic to match 'All'
   useEffect(() => {
+    let newFiltered;
     if (selectedCategory === 'All') {
-      setFilteredAnnouncements(announcements);
+      newFiltered = announcements;
     } else {
-      setFilteredAnnouncements(announcements.filter(item => item.category === selectedCategory));
+      newFiltered = announcements.filter(item => item.category === selectedCategory);
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFilteredAnnouncements(newFiltered);
   }, [selectedCategory, announcements]);
 
   const handleLogout = () => {
@@ -246,14 +249,14 @@ const StudentFeed = () => {
         {/* ================= MODAL ================= */}
         <AnimatePresence>
           {selectedAnnouncement && (
-            <motion.div 
+            <Motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-[60] flex items-center justify-center p-4 md:p-8 bg-black/95 backdrop-blur-sm"
               onClick={() => setSelectedAnnouncement(null)}
             >
-              <motion.div 
+              <Motion.div 
                 initial={{ scale: 0.95, opacity: 0, y: 20 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.95, opacity: 0, y: 20 }}
@@ -316,8 +319,8 @@ const StudentFeed = () => {
                     </div>
                   )}
                 </div>
-              </motion.div>
-            </motion.div>
+              </Motion.div>
+            </Motion.div>
           )}
         </AnimatePresence>
       </div>
