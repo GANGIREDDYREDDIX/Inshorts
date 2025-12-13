@@ -5,10 +5,8 @@ const { comparePassword, sanitizeInput, loginLimiter } = require('../utils/secur
 const { body, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
 
-// Login Route
 router.post(
   '/login',
-  // Validation middleware
   [
     body('regId').isString().trim().isLength({ min: 1 }).withMessage('regId is required'),
     body('password').isString().isLength({ min: 1 }).withMessage('password is required')
@@ -22,12 +20,10 @@ router.post(
 
     const { regId, password } = req.body;
 
-    // Sanitize regId
     if (!sanitizeInput(regId)) {
       return res.status(400).json({ message: 'Invalid input format' });
     }
 
-    // Rate limiting (requires express trust proxy configured in production)
     const clientIp = req.ip;
     if (!loginLimiter.check(clientIp)) {
       return res.status(429).json({
@@ -41,24 +37,30 @@ router.post(
         return res.status(401).json({ message: 'Invalid credentials' });
       }
 
-      // Compare password (expecting hashed password)
       const isValidPassword = await comparePassword(password, user.password);
       if (!isValidPassword) {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
 
-      // Issue JWT token
-      if (!process.env.JWT_SECRET) {
-        console.warn('JWT_SECRET is not set. Tokens will be unsigned. Set JWT_SECRET in production.');
+      const jwtSecret = process.env.JWT_SECRET;
+      if (!jwtSecret) {
+        const msg = 'JWT_SECRET is not set. Using development fallback secret. Do NOT use this in production.';
+        if (process.env.NODE_ENV === 'production') {
+          console.error(msg + ' Aborting login to avoid issuing weak tokens in production.');
+          return res.status(500).json({ message: 'Server misconfiguration' });
+        } else {
+          console.warn(msg);
+        }
       }
+
+      const expiresIn = process.env.JWT_EXPIRES_IN || '1h';
       const token = jwt.sign(
         { sub: user._id.toString(), role: user.role },
-        process.env.JWT_SECRET || 'dev-secret',
-        { expiresIn: '1h' }
+        jwtSecret || 'dev-secret',
+        { expiresIn }
       );
 
-      // Return token and minimal user info
-      res.json({ token, user: { id: user._id, regId: user.regId, role: user.role } });
+      res.json({ token, tokenType: 'Bearer', expiresIn, user: { id: user._id, regId: user.regId, role: user.role } });
     } catch (err) {
       console.error('Login error:', err && err.stack ? err.stack : err);
       res.status(500).json({ message: 'An error occurred during login' });

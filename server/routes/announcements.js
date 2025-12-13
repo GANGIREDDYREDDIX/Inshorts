@@ -21,7 +21,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Create announcement (Teacher only)
 router.post('/', upload.array('files'), async (req, res) => {
   try {
     const { title, description, tags, authorId, category, summary: manualSummary, audience, students, staff } = req.body;
@@ -101,7 +100,6 @@ router.post('/', upload.array('files'), async (req, res) => {
   }
 });
 
-// Update announcement
 router.put('/:id', upload.array('files'), async (req, res) => {
   const { title, description, tags, category, summary: manualSummary, audience, students, staff } = req.body;
   try {
@@ -141,8 +139,6 @@ router.put('/:id', upload.array('files'), async (req, res) => {
       summary = await generateSummary(description || announcement.originalDescription);
     }
 
-    // Regenerate image if title or tags changed
-    // Note: We always regenerate image if tags are provided, or if title changed
     if ((parsedTags && JSON.stringify(parsedTags) !== JSON.stringify(announcement.tags)) || (title && title !== announcement.title)) {
       imageUrl = await generateImage(title || announcement.title, parsedTags || announcement.tags);
     }
@@ -176,7 +172,6 @@ router.put('/:id', upload.array('files'), async (req, res) => {
   }
 });
 
-// Regenerate image for announcement
 router.post('/:id/regenerate-image', async (req, res) => {
   const { customImageUrl } = req.body;
   

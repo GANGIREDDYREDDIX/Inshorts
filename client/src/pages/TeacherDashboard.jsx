@@ -26,16 +26,17 @@ const TeacherDashboard = () => {
   const [attachments, setAttachments] = useState([]);
   const navigate = useNavigate();
 
-  const user = JSON.parse(localStorage.getItem('user'));
+  const userData = JSON.parse(localStorage.getItem('user'));
+  const user = userData?.user;
 
   const fetchAnnouncements = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}?authorId=${user.id}`);
+      const res = await axios.get(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}?authorId=${user?.id}`);
       setAnnouncements(res.data);
     } catch (err) {
-      console.error(err);
+      // Silently handle - UI shows empty state
     }
-  }, [user.id]);
+  }, [user?.id]);
 
   useEffect(() => {
     fetchAnnouncements();
@@ -223,12 +224,9 @@ const TeacherDashboard = () => {
     if (!selectedAnnouncement) return;
     setImageLoading(true);
     try {
-      console.log('Regenerating image for:', selectedAnnouncement._id);
-      console.log('Custom URL:', customImageUrl.trim());
       const res = await axios.post(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}/${selectedAnnouncement._id}/regenerate-image`, {
         customImageUrl: customImageUrl.trim()
       });
-      console.log('Response:', res.data);
       // Update announcements list
       setAnnouncements(announcements.map(a => a._id === res.data._id ? res.data : a));
       // Update selected announcement to show new image in modal
@@ -239,7 +237,6 @@ const TeacherDashboard = () => {
         setShowImageModal(false);
       }, 1000);
     } catch (err) {
-      console.error('Error details:', err.response?.data || err.message);
       const errorMsg = err.response?.data?.message || err.message || 'Unknown error';
       alert(`Failed to update image: ${errorMsg}`);
     } finally {
@@ -277,7 +274,7 @@ const TeacherDashboard = () => {
         });
         alert('Announcement Updated!');
       } else {
-        formData.append('authorId', user.id);
+        formData.append('authorId', user?.id);
         await axios.post(API_ENDPOINTS.ANNOUNCEMENTS.BASE, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });

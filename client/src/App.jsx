@@ -6,9 +6,9 @@ import StudentFeed from './pages/StudentFeed';
 import AnnouncementHistory from './pages/AnnouncementHistory';
 
 const PrivateRoute = ({ children, role }) => {
-  const user = JSON.parse(localStorage.getItem('user'));
-  if (!user) return <Navigate to="/" />;
-  if (role && user.role !== role) return <Navigate to="/" />;
+  const userData = JSON.parse(localStorage.getItem('user'));
+  if (!userData) return <Navigate to="/" />;
+  if (role && userData.user.role !== role) return <Navigate to="/" />;
   return children;
 };
 

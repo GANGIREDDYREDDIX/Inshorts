@@ -23,7 +23,7 @@ const AnnouncementHistory = () => {
         setAnnouncements(res.data);
         setFilteredAnnouncements(res.data);
       } catch (err) {
-        console.error('Error fetching announcements:', err);
+        // Silently handle
       }
     };
     fetchAnnouncements();
@@ -99,8 +99,8 @@ const AnnouncementHistory = () => {
   };
 
   const handleBack = () => {
-    const user = JSON.parse(localStorage.getItem('user'));
-    if (user?.role === 'teacher') {
+    const userData = JSON.parse(localStorage.getItem('user'));
+    if (userData?.user?.role === 'teacher') {
       navigate('/dashboard');
     } else {
       navigate('/feed');

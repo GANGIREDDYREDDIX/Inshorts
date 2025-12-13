@@ -8,30 +8,47 @@ const StudentFeed = () => {
   const [announcements, setAnnouncements] = useState([]);
   const [filteredAnnouncements, setFilteredAnnouncements] = useState([]);
   
-  // FIX 1: Ensure default state matches the first category
   const [selectedCategory, setSelectedCategory] = useState('All'); 
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const navigate = useNavigate();
 
-  // FIX 2: Variable name consistency
+  const userData = JSON.parse(localStorage.getItem('user'));
+  const currentStudent = userData?.user;
+
   const categories = ['All', 'Academic', 'Administrative/Misc', 'Co-curricular/Sports/Cultural', 'Placement', 'Benefits'];
 
   useEffect(() => {
-    // Replace with your actual API endpoint
     const fetchAnnouncements = async () => {
       try {
         const res = await axios.get(API_ENDPOINTS.ANNOUNCEMENTS.BASE);
-        setAnnouncements(res.data);
-        // Initialize filtered list with all data
-        setFilteredAnnouncements(res.data); 
+        
+        // Filter announcements for students
+        const studentAnnouncements = res.data.filter(announcement => {
+          // Check if audience includes students
+          if (announcement.audience !== 'Students' && announcement.audience !== 'Both') {
+            return false;
+          }
+          
+          // If there's a specific student list and it's not empty, check if current student is in it
+          if (announcement.students && announcement.students.length > 0) {
+            return announcement.students.some(
+              student => student.regId === currentStudent?.regId
+            );
+          }
+          
+          // If no specific student list or it's empty, show to all students
+          return true;
+        });
+        
+        setAnnouncements(studentAnnouncements);
+        setFilteredAnnouncements(studentAnnouncements); 
       } catch (err) {
-        console.error(err);
+        // Silently handle - UI shows empty state
       }
     };
     fetchAnnouncements();
-  }, []);
+  }, [currentStudent?.regId]);
 
-  // FIX 3: Fixed Filter Logic to match 'All'
   useEffect(() => {
     let newFiltered;
     if (selectedCategory === 'All') {
@@ -39,7 +56,6 @@ const StudentFeed = () => {
     } else {
       newFiltered = announcements.filter(item => item.category === selectedCategory);
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFilteredAnnouncements(newFiltered);
   }, [selectedCategory, announcements]);
 
