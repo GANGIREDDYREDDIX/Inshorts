@@ -4,6 +4,7 @@ const Announcement = require('../models/Announcement');
 const { generateSummary, generateImage } = require('../services/ai');
 const upload = require('../middleware/upload');
 const path = require('path');
+const fs = require('fs').promises;
 const { sanitizeInput } = require('../utils/security');
 
 // Get all announcements (optional filter by authorId)
@@ -62,7 +63,7 @@ router.post('/', upload.array('files'), async (req, res) => {
       }
     } catch (parseErr) {
       console.error('Error parsing JSON fields:', parseErr);
-      // Continue with empty arrays if parsing fails
+      return res.status(400).json({ message: 'Invalid JSON format in tags, students, or staff fields' });
     }
 
     // Generate AI content
@@ -75,7 +76,7 @@ router.post('/', upload.array('files'), async (req, res) => {
       fileName: file.originalname,
       fileUrl: `/uploads/${file.filename}`,
       fileSize: file.size,
-      mimeType: file.mimetype
+      fileType: file.mimetype
     })) : [];
 
     const newAnnouncement = new Announcement({
@@ -126,6 +127,7 @@ router.put('/:id', upload.array('files'), async (req, res) => {
       else if (staff) parsedStaff = staff;
     } catch (parseErr) {
       console.error('Error parsing JSON fields:', parseErr);
+      return res.status(400).json({ message: 'Invalid JSON format in tags, students, or staff fields' });
     }
 
     // Regenerate summary if description changed AND no manual summary provided
@@ -151,7 +153,7 @@ router.put('/:id', upload.array('files'), async (req, res) => {
         fileName: file.originalname,
         fileUrl: `/uploads/${file.filename}`,
         fileSize: file.size,
-        mimeType: file.mimetype
+        fileType: file.mimetype
       }));
       announcement.attachments = newAttachments;
     }
@@ -182,6 +184,12 @@ router.post('/:id/regenerate-image', async (req, res) => {
     const announcement = await Announcement.findById(req.params.id);
     if (!announcement) {
       return res.status(404).json({ message: 'Announcement not found' });
+    }
+
+    // Authorization: require authorId in body or x-user-id header and match announcement author
+    const userId = req.body.authorId || req.headers['x-user-id'];
+    if (!userId || userId.toString() !== announcement.authorId.toString()) {
+      return res.status(403).json({ message: 'Not authorized to upload files to this announcement' });
     }
 
     // If custom URL provided, use it; otherwise regenerate with AI
@@ -253,6 +261,24 @@ router.delete('/:id/attachment/:attachmentId', async (req, res) => {
       return res.status(404).json({ message: 'Attachment not found' });
     }
 
+    // Authorization: require authorId in body or x-user-id header and match announcement author
+    const userId = req.body.authorId || req.headers['x-user-id'];
+    if (!userId || userId.toString() !== announcement.authorId.toString()) {
+      return res.status(403).json({ message: 'Not authorized to delete attachments from this announcement' });
+    }
+
+    // Delete file from disk (best-effort)
+    const attachment = announcement.attachments[attachmentIndex];
+    if (attachment && attachment.fileUrl) {
+      try {
+        const filePath = path.join(__dirname, '..', attachment.fileUrl);
+        await fs.unlink(filePath);
+      } catch (fileErr) {
+        console.error('Failed to delete file from disk:', fileErr.message);
+        // continue even if unlink fails
+      }
+    }
+
     // Remove from array
     announcement.attachments.splice(attachmentIndex, 1);
     await announcement.save();
@@ -266,8 +292,30 @@ router.delete('/:id/attachment/:attachmentId', async (req, res) => {
 // Delete announcement
 router.delete('/:id', async (req, res) => {
   try {
-    const announcement = await Announcement.findByIdAndDelete(req.params.id);
+    const announcement = await Announcement.findById(req.params.id);
     if (!announcement) return res.status(404).json({ message: 'Announcement not found' });
+
+    // Authorization: require authorId in body or x-user-id header and match announcement author
+    const userId = req.body.authorId || req.headers['x-user-id'];
+    if (!userId || userId.toString() !== announcement.authorId.toString()) {
+      return res.status(403).json({ message: 'Not authorized to delete this announcement' });
+    }
+
+    // Delete files from disk (best-effort)
+    if (announcement.attachments && announcement.attachments.length > 0) {
+      for (const att of announcement.attachments) {
+        if (att.fileUrl) {
+          try {
+            const filePath = path.join(__dirname, '..', att.fileUrl);
+            await fs.unlink(filePath);
+          } catch (fileErr) {
+            console.error('Failed to delete file from disk during announcement deletion:', fileErr.message);
+          }
+        }
+      }
+    }
+
+    await Announcement.findByIdAndDelete(req.params.id);
     res.json({ message: 'Announcement deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });

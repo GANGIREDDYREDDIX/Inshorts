@@ -17,8 +17,8 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ message: 'Invalid input format' });
   }
 
-  // Rate limiting
-  const clientIp = req.ip || req.connection.remoteAddress;
+  // Rate limiting (requires express trust proxy configured in production)
+  const clientIp = req.ip;
   if (!loginLimiter.check(clientIp)) {
     return res.status(429).json({ 
       message: 'Too many login attempts. Please try again later.' 
@@ -31,16 +31,8 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Compare password (supports both hashed and plain text for backward compatibility)
-    let isValidPassword = false;
-    if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
-      // Password is hashed
-      isValidPassword = await comparePassword(password, user.password);
-    } else {
-      // Legacy plain text password (for development/testing only)
-      isValidPassword = user.password === password;
-    }
-
+    // Compare password (expecting hashed password)
+    const isValidPassword = await comparePassword(password, user.password);
     if (!isValidPassword) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }

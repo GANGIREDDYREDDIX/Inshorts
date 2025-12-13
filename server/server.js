@@ -7,9 +7,16 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth');
 const announcementRoutes = require('./routes/announcements');
 const User = require('./models/User');
+const { hashPassword } = require('./utils/security');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+
+// If running behind a proxy (e.g., in production), trust the proxy so req.ip is
+// populated from X-Forwarded-For. Configure via environment when needed.
+if (process.env.TRUST_PROXY === 'true' || process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', true);
+}
 
 // Security Middleware
 app.use(helmet({
@@ -60,17 +67,24 @@ mongoose.connection.on('connected', () => console.log('Mongoose event: connected
 mongoose.connection.on('error', (err) => console.error('Mongoose event: error', err && err.message));
 mongoose.connection.on('disconnected', () => console.warn('Mongoose event: disconnected'));
 
-// Seed Users
+// Seed Users (development only)
 const seedUsers = async () => {
   try {
+    if (process.env.NODE_ENV === 'production') {
+      console.log('Skipping user seeding in production');
+      return;
+    }
+
     const count = await User.countDocuments();
     if (count === 0) {
+      // Hash seeded passwords before inserting
+      const seedPassword = process.env.SEED_PASSWORD || 'pass123';
       const users = [
-        { regId: 'teacher1', password: 'pass123', role: 'teacher' },
-        { regId: 'student1', password: 'pass123', role: 'student' }
+        { regId: 'teacher1', password: await hashPassword(seedPassword), role: 'teacher' },
+        { regId: 'student1', password: await hashPassword(seedPassword), role: 'student' }
       ];
       await User.insertMany(users);
-      console.log('Users Seeded');
+      console.log('Users Seeded (passwords hashed)');
     } else {
       console.log('Users already exist, skipping seed');
     }

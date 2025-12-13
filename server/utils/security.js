@@ -75,12 +75,15 @@ class RateLimiter {
 // Create a rate limiter instance
 const loginLimiter = new RateLimiter(5, 15 * 60 * 1000); // 5 attempts per 15 minutes
 
-// Clean up every hour
-setInterval(() => loginLimiter.cleanup(), 60 * 60 * 1000);
+// Clean up every hour and expose a stop function for graceful shutdown/tests
+const cleanupInterval = setInterval(() => loginLimiter.cleanup(), 60 * 60 * 1000);
+
+const stopCleanup = () => clearInterval(cleanupInterval);
 
 module.exports = {
   hashPassword,
   comparePassword,
   sanitizeInput,
   loginLimiter,
+  stopCleanup,
 };
