@@ -146,7 +146,16 @@ router.put('/:id', upload.array('files'), async (req, res) => {
         fileSize: file.size,
         fileType: file.mimetype
       }));
-      announcement.attachments = newAttachments;
+      
+      // Initialize attachments array if missing
+      if (!announcement.attachments) {
+        announcement.attachments = [];
+      }
+      
+      // Append new attachments, avoiding duplicates by filename
+      const existingFilenames = new Set(announcement.attachments.map(att => att.fileName));
+      const uniqueNewAttachments = newAttachments.filter(att => !existingFilenames.has(att.fileName));
+      announcement.attachments = announcement.attachments.concat(uniqueNewAttachments);
     }
 
     announcement.title = title || announcement.title;
@@ -261,8 +270,26 @@ router.delete('/:id/attachment/:attachmentId', async (req, res) => {
     const attachment = announcement.attachments[attachmentIndex];
     if (attachment && attachment.fileUrl) {
       try {
-        const filePath = path.join(__dirname, '..', attachment.fileUrl);
-        await fs.unlink(filePath);
+        const safeAttachmentsDir = path.resolve(__dirname, '../uploads');
+        
+        // Validate fileUrl is not absolute and doesn't contain path traversal
+        if (path.isAbsolute(attachment.fileUrl) || attachment.fileUrl.includes('..') || attachment.fileUrl.includes('\\')) {
+          console.error('Invalid file path detected, skipping deletion:', attachment.fileUrl);
+        } else {
+          // Extract filename and validate it
+          const filename = path.basename(attachment.fileUrl);
+          if (!/^[A-Za-z0-9._-]+$/.test(filename)) {
+            console.error('Invalid filename format, skipping deletion:', filename);
+          } else {
+            // Resolve absolute path and verify it's within safe directory
+            const filePath = path.resolve(safeAttachmentsDir, filename);
+            if (!filePath.startsWith(safeAttachmentsDir + path.sep)) {
+              console.error('File path escapes safe directory, skipping deletion:', filePath);
+            } else {
+              await fs.unlink(filePath);
+            }
+          }
+        }
       } catch (fileErr) {
         console.error('Failed to delete file from disk:', fileErr.message);
         // continue even if unlink fails
@@ -293,10 +320,31 @@ router.delete('/:id', async (req, res) => {
 
     // Delete files from disk (best-effort)
     if (announcement.attachments && announcement.attachments.length > 0) {
+      const safeAttachmentsDir = path.resolve(__dirname, '../uploads');
+      
       for (const att of announcement.attachments) {
         if (att.fileUrl) {
           try {
-            const filePath = path.join(__dirname, '..', att.fileUrl);
+            // Validate fileUrl is not absolute and doesn't contain path traversal
+            if (path.isAbsolute(att.fileUrl) || att.fileUrl.includes('..') || att.fileUrl.includes('\\')) {
+              console.error('Invalid file path detected, skipping deletion:', att.fileUrl);
+              continue;
+            }
+            
+            // Extract filename and validate it
+            const filename = path.basename(att.fileUrl);
+            if (!/^[A-Za-z0-9._-]+$/.test(filename)) {
+              console.error('Invalid filename format, skipping deletion:', filename);
+              continue;
+            }
+            
+            // Resolve absolute path and verify it's within safe directory
+            const filePath = path.resolve(safeAttachmentsDir, filename);
+            if (!filePath.startsWith(safeAttachmentsDir + path.sep)) {
+              console.error('File path escapes safe directory, skipping deletion:', filePath);
+              continue;
+            }
+            
             await fs.unlink(filePath);
           } catch (fileErr) {
             console.error('Failed to delete file from disk during announcement deletion:', fileErr.message);

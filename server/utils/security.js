@@ -33,20 +33,51 @@ const sanitizeInput = (input) => {
 };
 
 /**
- * Rate limiting helper - track requests by IP
+ * Rate limiting helper - Redis-backed for horizontal scalability
+ * Falls back to in-memory if Redis is unavailable
  */
 class RateLimiter {
-  constructor(maxRequests = 100, windowMs = 15 * 60 * 1000) {
-    this.requests = new Map();
+  constructor(maxRequests = 100, windowMs = 15 * 60 * 1000, redisClient = null) {
     this.maxRequests = maxRequests;
     this.windowMs = windowMs;
+    this.redisClient = redisClient;
+    this.fallbackMap = new Map(); // In-memory fallback
   }
 
-  check(ip) {
-    const now = Date.now();
-    const userRequests = this.requests.get(ip) || [];
+  async check(ip) {
+    // Use Redis if available
+    if (this.redisClient && this.redisClient.isReady) {
+      try {
+        const key = `rate_limit:${ip}`;
+        const windowSeconds = Math.ceil(this.windowMs / 1000);
+        
+        // Atomic INCR with expiry using Lua script
+        const luaScript = `
+          local key = KEYS[1]
+          local max = tonumber(ARGV[1])
+          local ttl = tonumber(ARGV[2])
+          local current = redis.call('INCR', key)
+          if current == 1 then
+            redis.call('EXPIRE', key, ttl)
+          end
+          return current
+        `;
+        
+        const count = await this.redisClient.eval(luaScript, {
+          keys: [key],
+          arguments: [String(this.maxRequests), String(windowSeconds)]
+        });
+        
+        return count <= this.maxRequests;
+      } catch (err) {
+        console.error('Redis rate limiter error, falling back to in-memory:', err.message);
+        // Fall through to in-memory implementation
+      }
+    }
     
-    // Remove old requests outside the time window
+    // In-memory fallback
+    const now = Date.now();
+    const userRequests = this.fallbackMap.get(ip) || [];
     const recentRequests = userRequests.filter(time => now - time < this.windowMs);
     
     if (recentRequests.length >= this.maxRequests) {
@@ -54,31 +85,55 @@ class RateLimiter {
     }
     
     recentRequests.push(now);
-    this.requests.set(ip, recentRequests);
+    this.fallbackMap.set(ip, recentRequests);
     return true;
   }
 
-  // Clean up old entries periodically
+  // Cleanup for in-memory fallback only
   cleanup() {
+    if (this.redisClient && this.redisClient.isReady) return; // No cleanup needed for Redis
+    
     const now = Date.now();
-    for (const [ip, requests] of this.requests.entries()) {
+    for (const [ip, requests] of this.fallbackMap.entries()) {
       const recentRequests = requests.filter(time => now - time < this.windowMs);
       if (recentRequests.length === 0) {
-        this.requests.delete(ip);
+        this.fallbackMap.delete(ip);
       } else {
-        this.requests.set(ip, recentRequests);
+        this.fallbackMap.set(ip, recentRequests);
       }
     }
   }
 }
 
-// Create a rate limiter instance
-const loginLimiter = new RateLimiter(5, 15 * 60 * 1000); // 5 attempts per 15 minutes
+// Initialize Redis client (optional - will use in-memory if not configured)
+let redisClient = null;
+try {
+  const redis = require('redis');
+  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+  
+  redisClient = redis.createClient({ url: redisUrl });
+  redisClient.on('error', (err) => {
+    console.warn('Redis connection error (rate limiting will use in-memory fallback):', err.message);
+  });
+  redisClient.connect().catch(() => {
+    console.warn('Redis not available, rate limiting will use in-memory storage');
+  });
+} catch (err) {
+  console.warn('Redis module not found, rate limiting will use in-memory storage');
+}
 
-// Clean up every hour and expose a stop function for graceful shutdown/tests
+// Create a rate limiter instance with Redis support
+const loginLimiter = new RateLimiter(5, 15 * 60 * 1000, redisClient); // 5 attempts per 15 minutes
+
+// Clean up in-memory fallback every hour
 const cleanupInterval = setInterval(() => loginLimiter.cleanup(), 60 * 60 * 1000);
 
-const stopCleanup = () => clearInterval(cleanupInterval);
+const stopCleanup = () => {
+  clearInterval(cleanupInterval);
+  if (redisClient) {
+    redisClient.quit().catch(() => {});
+  }
+};
 
 module.exports = {
   hashPassword,
@@ -86,4 +141,5 @@ module.exports = {
   sanitizeInput,
   loginLimiter,
   stopCleanup,
+  RateLimiter, // Export class for testing/custom instances
 };

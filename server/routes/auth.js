@@ -25,7 +25,8 @@ router.post(
     }
 
     const clientIp = req.ip;
-    if (!loginLimiter.check(clientIp)) {
+    const rateLimitOk = await loginLimiter.check(clientIp);
+    if (!rateLimitOk) {
       return res.status(429).json({
         message: 'Too many login attempts. Please try again later.'
       });
