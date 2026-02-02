@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import React, { useEffect, useState, useRef } from 'react';
+import axiosInstance from '../config/axios';
 import { useNavigate } from 'react-router-dom';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import API_ENDPOINTS from '../config/api';
@@ -7,23 +7,45 @@ import API_ENDPOINTS from '../config/api';
 const StudentFeed = () => {
   const [announcements, setAnnouncements] = useState([]);
   const [filteredAnnouncements, setFilteredAnnouncements] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
   const [selectedCategory, setSelectedCategory] = useState('All'); 
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const navigate = useNavigate();
+  const mobileScrollRef = useRef(null);
+  const desktopScrollRef = useRef(null);
 
-  const userData = JSON.parse(localStorage.getItem('user'));
+  // Safely parse user data from localStorage
+  const getUserData = () => {
+    try {
+      const stored = localStorage.getItem('user');
+      return stored ? JSON.parse(stored) : null;
+    } catch (err) {
+      console.error('Failed to parse user data:', err);
+      localStorage.removeItem('user');
+      navigate('/');
+      return null;
+    }
+  };
+
+  const userData = getUserData();
   const currentStudent = userData?.user;
 
-  const categories = ['All', 'Academic', 'Administrative/Misc', 'Co-curricular/Sports/Cultural', 'Placement', 'Benefits'];
+  const categories = ['All', 'Academic', 'Administrative/Misc', 'Sports/Cultural', 'Placement', 'Benefits', 'Competitions'];
 
   useEffect(() => {
     const fetchAnnouncements = async () => {
       try {
-        const res = await axios.get(API_ENDPOINTS.ANNOUNCEMENTS.BASE);
+        setLoading(true);
+        setError(null);
+        const res = await axiosInstance.get(API_ENDPOINTS.ANNOUNCEMENTS.BASE);
+        
+        // Extract data from the response (API returns { success: true, data: [...] })
+        const allAnnouncements = res.data?.data || [];
         
         // Filter announcements for students
-        const studentAnnouncements = res.data.filter(announcement => {
+        const studentAnnouncements = allAnnouncements.filter(announcement => {
           // Check if audience includes students
           if (announcement.audience !== 'Students' && announcement.audience !== 'Both') {
             return false;
@@ -41,9 +63,14 @@ const StudentFeed = () => {
         });
         
         setAnnouncements(studentAnnouncements);
-        setFilteredAnnouncements(studentAnnouncements); 
+        setFilteredAnnouncements(studentAnnouncements);
       } catch (err) {
-        // Silently handle - UI shows empty state
+        console.error('Failed to fetch announcements:', err);
+        setError(err.response?.data?.error || err.message || 'Failed to load announcements');
+        setAnnouncements([]);
+        setFilteredAnnouncements([]);
+      } finally {
+        setLoading(false);
       }
     };
     fetchAnnouncements();
@@ -54,11 +81,27 @@ const StudentFeed = () => {
     if (selectedCategory === 'All') {
       newFiltered = announcements;
     } else {
-      newFiltered = announcements.filter(item => 
-        item.category === selectedCategory || item.category === 'All'
-      );
+      newFiltered = announcements.filter(item => {
+        // Match exact category
+        if (item.category === selectedCategory) return true;
+        // Handle backward compatibility for Sports/Cultural
+        if (selectedCategory === 'Sports/Cultural' && item.category === 'Co-curricular/Sports/Cultural') return true;
+        // DON'T show "All" category in specific filters - only show exact matches
+        return false;
+      });
     }
+    console.log('Selected Category:', selectedCategory);
+    console.log('Filtered Announcements:', newFiltered.length);
+    console.log('All announcements:', announcements.map(a => ({ title: a.title, cat: a.category })));
     setFilteredAnnouncements(newFiltered);
+    
+    // Scroll to top when category changes
+    if (mobileScrollRef.current) {
+      mobileScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    if (desktopScrollRef.current) {
+      desktopScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }, [selectedCategory, announcements]);
 
   const handleLogout = () => {
@@ -66,10 +109,40 @@ const StudentFeed = () => {
     navigate('/');
   };
 
-  if (announcements.length === 0) {
+  if (loading) {
     return (
       <div className="h-[100dvh] flex items-center justify-center bg-black text-white">
         <p className="text-xl font-light animate-pulse">Loading feed...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="h-[100dvh] flex flex-col items-center justify-center bg-black text-white gap-4">
+        <p className="text-xl font-light text-red-400">Failed to load announcements</p>
+        <p className="text-sm text-gray-400">{error}</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="px-6 py-2 bg-white text-black rounded-lg hover:bg-gray-200 transition"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (announcements.length === 0) {
+    return (
+      <div className="h-[100dvh] flex flex-col items-center justify-center bg-black text-white gap-4">
+        <p className="text-xl font-light">No announcements yet</p>
+        <p className="text-sm text-gray-400">Check back later for updates</p>
+        <button 
+          onClick={handleLogout}
+          className="px-6 py-2 bg-white text-black rounded-lg hover:bg-gray-200 transition mt-4"
+        >
+          Logout
+        </button>
       </div>
     );
   }
@@ -99,7 +172,10 @@ const StudentFeed = () => {
                 {categories.map((cat) => (
                   <button
                     key={cat}
-                    onClick={() => setSelectedCategory(cat)}
+                    onClick={() => {
+                      console.log('Button clicked:', cat);
+                      setSelectedCategory(cat);
+                    }}
                     className={`whitespace-nowrap text-[15px] transition-colors duration-200 ${
                       selectedCategory === cat
                         ? 'text-blue-500 font-bold' 
@@ -132,9 +208,20 @@ const StudentFeed = () => {
           </div>
 
           {/* Feed Area */}
-          <div className="flex-1 overflow-y-scroll snap-y snap-mandatory no-scrollbar bg-black">
-            {filteredAnnouncements.map((item) => (
-              <div key={item._id} className="h-full w-full snap-start flex flex-col relative">
+          <div ref={mobileScrollRef} className="flex-1 overflow-y-scroll snap-y snap-mandatory no-scrollbar bg-black">
+            {filteredAnnouncements.length === 0 ? (
+              <div className="h-full w-full flex flex-col items-center justify-center">
+                <p className="text-zinc-400 text-lg">No announcements in this category</p>
+                <button 
+                  onClick={() => setSelectedCategory('All')}
+                  className="mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                >
+                  View All
+                </button>
+              </div>
+            ) : (
+              filteredAnnouncements.map((item) => (
+                <div key={item._id} className="h-full w-full snap-start flex flex-col relative">
                 
                 {/* Image Section */}
                 <div className="h-[40%] w-full relative shrink-0">
@@ -186,7 +273,8 @@ const StudentFeed = () => {
                   </div>
                 </div>
               </div>
-            ))}
+            ))
+            )}
           </div>
         </div>
 
@@ -200,7 +288,10 @@ const StudentFeed = () => {
                   {categories.map((cat) => (
                     <button
                       key={cat}
-                      onClick={() => setSelectedCategory(cat)}
+                      onClick={() => {
+                        console.log('Desktop button clicked:', cat);
+                        setSelectedCategory(cat);
+                      }}
                       className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${
                         selectedCategory === cat
                           ? 'bg-white text-black shadow-lg'
@@ -226,41 +317,54 @@ const StudentFeed = () => {
               </button>
             </div>
           </div>
-          <div className="h-full w-full overflow-y-scroll snap-y snap-mandatory scroll-smooth no-scrollbar">
-            {filteredAnnouncements.map((item) => (
-              <div key={item._id} className="w-full h-full snap-start relative flex items-end justify-center">
-                <div className="absolute inset-0 z-0">
-                  <img src={item.imageUrl} alt="bg" className="w-full h-full object-cover opacity-60" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent" />
-                  <div className="absolute inset-0 bg-gradient-to-r from-black via-transparent to-black" />
-                </div>
-                <div className="relative z-10 w-full max-w-6xl mb-16 p-8 grid grid-cols-2 gap-12 items-end">
-                  <div>
-                    <div className="flex gap-3 mb-4">
-                      <span className="px-3 py-1 rounded-full bg-blue-600 text-white text-xs font-bold tracking-wide">
-                        {item.category || 'General'}
-                      </span>
-                      <span className="px-3 py-1 rounded-full bg-white/10 text-white/80 text-xs border border-white/10">
-                        {new Date(item.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <h1 className="text-5xl font-extrabold text-white leading-tight mb-6">{item.title}</h1>
-                  </div>
-                  <div className="flex flex-col items-start gap-6 border-l border-white/20 pl-8">
-                    <div className="max-h-[40vh] overflow-y-auto custom-scroll pr-4">
-                      <p className="text-lg text-zinc-300 leading-relaxed">{item.summary}</p>
-                    </div>
-                    <button 
-                      onClick={() => setSelectedAnnouncement(item)}
-                      className="group flex items-center gap-2 text-white font-semibold hover:text-blue-400 transition-colors shrink-0"
-                    >
-                      <span>Read Full Announcement</span>
-                      <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
-                    </button>
-                  </div>
-                </div>
+          <div ref={desktopScrollRef} className="h-full w-full overflow-y-scroll snap-y snap-mandatory scroll-smooth no-scrollbar">
+            {filteredAnnouncements.length === 0 ? (
+              <div className="h-full w-full flex flex-col items-center justify-center">
+                <p className="text-zinc-400 text-2xl mb-2">No announcements in this category</p>
+                <p className="text-zinc-500 text-sm mb-6">Try selecting a different category</p>
+                <button 
+                  onClick={() => setSelectedCategory('All')}
+                  className="px-8 py-3 bg-white text-black rounded-full hover:bg-zinc-200 transition font-medium"
+                >
+                  View All Announcements
+                </button>
               </div>
-            ))}
+            ) : (
+              filteredAnnouncements.map((item) => (
+                <div key={item._id} className="w-full h-full snap-start relative flex items-end justify-center">
+                  <div className="absolute inset-0 z-0">
+                    <img src={item.imageUrl} alt="bg" className="w-full h-full object-cover opacity-60" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-black via-transparent to-black" />
+                  </div>
+                  <div className="relative z-10 w-full max-w-6xl mb-16 p-8 grid grid-cols-2 gap-12 items-end">
+                    <div>
+                      <div className="flex gap-3 mb-4">
+                        <span className="px-3 py-1 rounded-full bg-blue-600 text-white text-xs font-bold tracking-wide">
+                          {item.category || 'General'}
+                        </span>
+                        <span className="px-3 py-1 rounded-full bg-white/10 text-white/80 text-xs border border-white/10">
+                          {new Date(item.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <h1 className="text-5xl font-extrabold text-white leading-tight mb-6">{item.title}</h1>
+                    </div>
+                    <div className="flex flex-col items-start gap-6 border-l border-white/20 pl-8">
+                      <div className="max-h-[40vh] overflow-y-auto custom-scroll pr-4">
+                        <p className="text-lg text-zinc-300 leading-relaxed">{item.summary}</p>
+                      </div>
+                      <button 
+                        onClick={() => setSelectedAnnouncement(item)}
+                        className="group flex items-center gap-2 text-white font-semibold hover:text-blue-400 transition-colors shrink-0"
+                      >
+                        <span>Read Full Announcement</span>
+                        <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

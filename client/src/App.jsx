@@ -6,7 +6,16 @@ import StudentFeed from './pages/StudentFeed';
 import AnnouncementHistory from './pages/AnnouncementHistory';
 
 const PrivateRoute = ({ children, role }) => {
-  const userData = JSON.parse(localStorage.getItem('user'));
+  // Safely parse user data from localStorage
+  let userData = null;
+  try {
+    const stored = localStorage.getItem('user');
+    userData = stored ? JSON.parse(stored) : null;
+  } catch (err) {
+    console.error('Failed to parse user data:', err);
+    localStorage.removeItem('user'); // Clear corrupted data
+  }
+  
   if (!userData) return <Navigate to="/" />;
   if (role && userData.user.role !== role) return <Navigate to="/" />;
   return children;

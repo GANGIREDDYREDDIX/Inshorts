@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import axiosInstance from '../config/axios';
 import { useNavigate } from 'react-router-dom';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
@@ -26,13 +26,28 @@ const TeacherDashboard = () => {
   const [attachments, setAttachments] = useState([]);
   const navigate = useNavigate();
 
-  const userData = JSON.parse(localStorage.getItem('user'));
+  // Safely parse user data from localStorage
+  const getUserData = () => {
+    try {
+      const stored = localStorage.getItem('user');
+      return stored ? JSON.parse(stored) : null;
+    } catch (err) {
+      console.error('Failed to parse user data:', err);
+      localStorage.removeItem('user');
+      navigate('/');
+      return null;
+    }
+  };
+
+  const userData = getUserData();
   const user = userData?.user;
 
   const fetchAnnouncements = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}?authorId=${user?.id}`);
-      setAnnouncements(res.data);
+      const res = await axiosInstance.get(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}?authorId=${user?.id}`);
+      // Handle new API response format
+      const data = res.data.success ? res.data.data : res.data;
+      setAnnouncements(data);
     } catch (err) {
       // Silently handle - UI shows empty state
     }
@@ -43,7 +58,11 @@ const TeacherDashboard = () => {
   }, [fetchAnnouncements]);
 
   const handleLogout = () => {
-    localStorage.removeItem('user');
+    try {
+      localStorage.removeItem('user');
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
     navigate('/');
   };
 
@@ -169,14 +188,34 @@ const TeacherDashboard = () => {
     const files = e.target.files;
     if (!files) return;
     
-    const newAttachments = Array.from(files).map(file => ({
-      id: Date.now() + Math.random(),
-      file,
-      name: file.name,
-      size: file.size
-    }));
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+    const invalidFiles = [];
+    const validFiles = [];
     
-    setAttachments([...attachments, ...newAttachments]);
+    // Validate file sizes
+    Array.from(files).forEach(file => {
+      if (file.size > MAX_FILE_SIZE) {
+        invalidFiles.push(file.name);
+      } else {
+        validFiles.push({
+          id: Date.now() + Math.random(),
+          file,
+          name: file.name,
+          size: file.size
+        });
+      }
+    });
+    
+    // Show error for files that are too large
+    if (invalidFiles.length > 0) {
+      alert(`The following files exceed the 10MB size limit and cannot be uploaded:\n\n${invalidFiles.join('\n')}\n\nPlease choose smaller files.`);
+    }
+    
+    // Add valid files to attachments
+    if (validFiles.length > 0) {
+      setAttachments([...attachments, ...validFiles]);
+    }
+    
     e.target.value = ''; // Reset input
   };
 
@@ -206,7 +245,7 @@ const TeacherDashboard = () => {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this announcement?')) return;
     try {
-      await axios.delete(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}/${id}`, {
+      await axiosInstance.delete(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}/${id}`, {
         data: { authorId: user?.id }
       });
       fetchAnnouncements();
@@ -226,7 +265,7 @@ const TeacherDashboard = () => {
     if (!selectedAnnouncement) return;
     setImageLoading(true);
     try {
-      const res = await axios.post(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}/${selectedAnnouncement._id}/regenerate-image`, {
+      const res = await axiosInstance.post(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}/${selectedAnnouncement._id}/regenerate-image`, {
         customImageUrl: customImageUrl.trim(),
         authorId: user?.id
       });
@@ -272,13 +311,13 @@ const TeacherDashboard = () => {
       });
       
       if (editingId) {
-        await axios.put(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}/${editingId}`, formData, {
+        await axiosInstance.put(`${API_ENDPOINTS.ANNOUNCEMENTS.BASE}/${editingId}`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
         alert('Announcement Updated!');
       } else {
         formData.append('authorId', user?.id);
-        await axios.post(API_ENDPOINTS.ANNOUNCEMENTS.BASE, formData, {
+        await axiosInstance.post(API_ENDPOINTS.ANNOUNCEMENTS.BASE, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
         alert('Announcement Posted Successfully!');
@@ -372,9 +411,10 @@ const TeacherDashboard = () => {
                         <option value="All">All</option>
                         <option value="Academic">Academic</option>
                         <option value="Administrative/Misc">Administrative/Misc</option>
-                        <option value="Co-curricular/Sports/Cultural">Co-curricular/Sports/Cultural</option>
+                        <option value="Sports/Cultural">Sports/Cultural</option>
                         <option value="Placement">Placement</option>
                         <option value="Benefits">Benefits</option>
+                        <option value="Competitions">Competitions</option>
                       </select>
                       <p className="text-xs text-gray-400 mt-2">Select the category for this announcement</p>
                     </div>

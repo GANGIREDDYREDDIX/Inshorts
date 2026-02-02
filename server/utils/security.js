@@ -6,7 +6,9 @@ const bcrypt = require('bcryptjs');
  * @returns {Promise<string>} Hashed password
  */
 const hashPassword = async (password) => {
-  const salt = await bcrypt.genSalt(10);
+  // Use 12 rounds for better security (2^12 = 4096 iterations)
+  // Higher rounds = slower but more secure against brute force
+  const salt = await bcrypt.genSalt(12);
   return await bcrypt.hash(password, salt);
 };
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import axiosInstance from '../config/axios';
 import { useNavigate } from 'react-router-dom';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import API_ENDPOINTS from '../config/api';
@@ -16,14 +16,29 @@ const AnnouncementHistory = () => {
 
   const searchOptions = ['Subject Wise', 'Date Wise', 'Uploaded By', 'Subject and Date', 'Description Wise'];
 
+  // Safe localStorage getter
+  const getUserData = () => {
+    try {
+      const data = localStorage.getItem('user');
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error('Failed to parse user data from localStorage:', error);
+      localStorage.removeItem('user');
+      return null;
+    }
+  };
+
   useEffect(() => {
     const fetchAnnouncements = async () => {
       try {
-        const res = await axios.get(API_ENDPOINTS.ANNOUNCEMENTS.BASE);
-        setAnnouncements(res.data);
-        setFilteredAnnouncements(res.data);
+        const res = await axiosInstance.get(API_ENDPOINTS.ANNOUNCEMENTS.BASE);
+        const allAnnouncements = res.data?.data || [];
+        setAnnouncements(allAnnouncements);
+        setFilteredAnnouncements(allAnnouncements);
       } catch (err) {
-        // Silently handle
+        console.error('Failed to fetch announcements:', err);
+        setAnnouncements([]);
+        setFilteredAnnouncements([]);
       }
     };
     fetchAnnouncements();
@@ -99,7 +114,7 @@ const AnnouncementHistory = () => {
   };
 
   const handleBack = () => {
-    const userData = JSON.parse(localStorage.getItem('user'));
+    const userData = getUserData();
     if (userData?.user?.role === 'teacher') {
       navigate('/dashboard');
     } else {

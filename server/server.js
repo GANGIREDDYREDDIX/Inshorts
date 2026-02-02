@@ -17,13 +17,42 @@ if (process.env.TRUST_PROXY === 'true' || process.env.NODE_ENV === 'production')
 }
 
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:", "http:"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"]
+    }
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  }
 }));
 
+// Enhanced CORS configuration with multiple origins support
+const getAllowedOrigins = () => {
+  const origins = process.env.CLIENT_URL || 'http://localhost:5173';
+  return origins.split(',').map(origin => origin.trim());
+};
+
 const corsOptions = {
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    const allowedOrigins = getAllowedOrigins();
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id']
 };
 app.use(cors(corsOptions));
 
@@ -88,7 +117,51 @@ const startServer = async () => {
     app.use('/api/announcements', announcementRoutes);
     
     app.get('/', (req, res) => {
-      res.send('Server is running');
+      res.json({ success: true, message: 'Server is running', version: '1.0.0' });
+    });
+
+    // Global error handler - catches all unhandled errors
+    app.use((err, req, res, next) => {
+      // Log error details
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Unhandled error:', err);
+      }
+
+      // Handle specific error types
+      if (err.name === 'ValidationError') {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          code: 'VALIDATION_ERROR',
+          details: err.message
+        });
+      }
+
+      if (err.name === 'CastError') {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid ID format',
+          code: 'INVALID_ID'
+        });
+      }
+
+      // Generic error response
+      res.status(err.status || 500).json({
+        success: false,
+        error: process.env.NODE_ENV === 'production' 
+          ? 'An unexpected error occurred' 
+          : err.message,
+        code: err.code || 'INTERNAL_ERROR'
+      });
+    });
+
+    // 404 handler
+    app.use((req, res) => {
+      res.status(404).json({
+        success: false,
+        error: 'Route not found',
+        code: 'NOT_FOUND'
+      });
     });
     
     app.listen(PORT, '0.0.0.0', () => {

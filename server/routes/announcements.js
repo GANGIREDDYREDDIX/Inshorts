@@ -1,43 +1,103 @@
 const express = require('express');
 const router = express.Router();
 const Announcement = require('../models/Announcement');
+const mongoose = require('mongoose');
 const { generateSummary, generateImage } = require('../services/ai');
 const upload = require('../middleware/upload');
 const path = require('path');
 const fs = require('fs').promises;
 const { sanitizeInput } = require('../utils/security');
+const { authenticate, authorize } = require('../middleware/auth');
+const { body, param, validationResult } = require('express-validator');
+const rateLimit = require('express-rate-limit');
+
+// Rate limiter for file uploads (5 uploads per 15 minutes)
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  message: { 
+    success: false, 
+    error: 'Too many upload requests. Please try again in 15 minutes.', 
+    code: 'RATE_LIMIT_EXCEEDED' 
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Email validation regex
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Helper: Validate MongoDB ObjectId
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 // Get all announcements (optional filter by authorId)
 router.get('/', async (req, res) => {
   const { authorId, category } = req.query;
   try {
     let query = {};
-    if (authorId) query.authorId = authorId;
+    
+    // Sanitize authorId if provided
+    if (authorId) {
+      if (!isValidObjectId(authorId)) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Invalid author ID format', 
+          code: 'INVALID_AUTHOR_ID' 
+        });
+      }
+      query.authorId = authorId;
+    }
+    
     if (category && category !== 'All') query.category = category;
+    
     const announcements = await Announcement.find(query).sort({ createdAt: -1 });
-    res.json(announcements);
+    res.json({ success: true, data: announcements });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch announcements', 
+      code: 'FETCH_ERROR' 
+    });
   }
 });
 
-router.post('/', upload.array('files'), async (req, res) => {
+router.post('/', authenticate, authorize('teacher'), upload.array('files'), async (req, res) => {
   try {
-    const { title, description, tags, authorId, category, summary: manualSummary, audience, students, staff } = req.body;
+    const { title, description, tags, category, summary: manualSummary, audience, students, staff } = req.body;
     
     // Input validation
-    if (!title || !description || !authorId) {
-      return res.status(400).json({ message: 'Title, description, and authorId are required' });
+    if (!title || !description) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Title and description are required', 
+        code: 'MISSING_FIELDS' 
+      });
+    }
+
+    // Validate lengths
+    if (title.length > 200) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Title must be less than 200 characters', 
+        code: 'TITLE_TOO_LONG' 
+      });
+    }
+
+    if (description.length > 5000) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Description must be less than 5000 characters', 
+        code: 'DESCRIPTION_TOO_LONG' 
+      });
     }
 
     // Sanitize text inputs
     if (!sanitizeInput(title) || !sanitizeInput(description)) {
-      return res.status(400).json({ message: 'Invalid input format' });
-    }
-
-    // Validate title length
-    if (title.length > 200) {
-      return res.status(400).json({ message: 'Title must be less than 200 characters' });
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid input format detected', 
+        code: 'INVALID_INPUT' 
+      });
     }
 
     // Parse JSON fields from FormData
@@ -48,20 +108,52 @@ router.post('/', upload.array('files'), async (req, res) => {
     try {
       if (tags && typeof tags === 'string') {
         parsedTags = JSON.parse(tags);
+        // Limit tags to 5 maximum
+        if (parsedTags.length > 5) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Maximum 5 tags allowed', 
+            code: 'TOO_MANY_TAGS' 
+          });
+        }
       }
+      
       if (students && typeof students === 'string') {
         parsedStudents = JSON.parse(students);
+        // Validate email formats
+        for (const student of parsedStudents) {
+          if (student.email && !emailRegex.test(student.email)) {
+            return res.status(400).json({ 
+              success: false, 
+              error: `Invalid email format: ${student.email}`, 
+              code: 'INVALID_EMAIL' 
+            });
+          }
+        }
       }
+      
       if (staff && typeof staff === 'string') {
         parsedStaff = JSON.parse(staff);
+        // Validate email formats
+        for (const member of parsedStaff) {
+          if (member.email && !emailRegex.test(member.email)) {
+            return res.status(400).json({ 
+              success: false, 
+              error: `Invalid email format: ${member.email}`, 
+              code: 'INVALID_EMAIL' 
+            });
+          }
+        }
       }
     } catch (parseErr) {
-      console.error('Error parsing JSON fields:', parseErr);
-      return res.status(400).json({ message: 'Invalid JSON format in tags, students, or staff fields' });
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid JSON format in tags, students, or staff fields', 
+        code: 'JSON_PARSE_ERROR' 
+      });
     }
 
     // Generate AI content
-    // Use manual summary if provided, otherwise generate
     const summary = manualSummary || await generateSummary(description);
     const imageUrl = await generateImage(title, parsedTags);
 
@@ -84,22 +176,68 @@ router.post('/', upload.array('files'), async (req, res) => {
       students: Array.isArray(parsedStudents) ? parsedStudents : [],
       staff: Array.isArray(parsedStaff) ? parsedStaff : [],
       attachments: attachments || [],
-      authorId
+      authorId: req.user.id // Use authenticated user's ID
     });
 
     const savedAnnouncement = await newAnnouncement.save();
-    res.status(201).json(savedAnnouncement);
+    res.status(201).json({ success: true, data: savedAnnouncement });
   } catch (err) {
-    console.error('Error creating announcement:', err);
-    res.status(500).json({ message: err.message || 'Failed to create announcement' });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to create announcement', 
+      code: 'CREATE_ERROR' 
+    });
   }
 });
 
-router.put('/:id', upload.array('files'), async (req, res) => {
+router.put('/:id', authenticate, authorize('teacher'), upload.array('files'), async (req, res) => {
   const { title, description, tags, category, summary: manualSummary, audience, students, staff } = req.body;
+  
   try {
+    // Validate ID format
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid announcement ID format', 
+        code: 'INVALID_ID' 
+      });
+    }
+
     const announcement = await Announcement.findById(req.params.id);
-    if (!announcement) return res.status(404).json({ message: 'Announcement not found' });
+    
+    if (!announcement) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Announcement not found', 
+        code: 'NOT_FOUND' 
+      });
+    }
+
+    // Authorization: Check if user owns this announcement
+    if (announcement.authorId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'You are not authorized to edit this announcement', 
+        code: 'FORBIDDEN' 
+      });
+    }
+
+    // Validate input lengths if provided
+    if (title && title.length > 200) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Title must be less than 200 characters', 
+        code: 'TITLE_TOO_LONG' 
+      });
+    }
+
+    if (description && description.length > 5000) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Description must be less than 5000 characters', 
+        code: 'DESCRIPTION_TOO_LONG' 
+      });
+    }
 
     let summary = announcement.summary;
     let imageUrl = announcement.imageUrl;
@@ -119,18 +257,19 @@ router.put('/:id', upload.array('files'), async (req, res) => {
       if (staff && typeof staff === 'string') parsedStaff = JSON.parse(staff);
       else if (staff) parsedStaff = staff;
     } catch (parseErr) {
-      console.error('Error parsing JSON fields:', parseErr);
-      return res.status(400).json({ message: 'Invalid JSON format in tags, students, or staff fields' });
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid JSON format in tags, students, or staff fields', 
+        code: 'JSON_PARSE_ERROR' 
+      });
     }
 
     // Regenerate summary if description changed AND no manual summary provided
-    // If manual summary is provided AND it's different from the old one, use it.
     if (manualSummary && manualSummary !== announcement.summary) {
       summary = manualSummary;
     } else if (description && description !== announcement.originalDescription) {
       summary = await generateSummary(description);
     } else if (manualSummary === "") {
-      // User explicitly cleared the summary, force regenerate
       summary = await generateSummary(description || announcement.originalDescription);
     }
 
@@ -147,7 +286,6 @@ router.put('/:id', upload.array('files'), async (req, res) => {
         fileType: file.mimetype
       }));
       
-      // Initialize attachments array if missing
       if (!announcement.attachments) {
         announcement.attachments = [];
       }
@@ -169,26 +307,45 @@ router.put('/:id', upload.array('files'), async (req, res) => {
     announcement.imageUrl = imageUrl;
 
     const updatedAnnouncement = await announcement.save();
-    res.json(updatedAnnouncement);
+    res.json({ success: true, data: updatedAnnouncement });
   } catch (err) {
-    console.error('Error updating announcement:', err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update announcement', 
+      code: 'UPDATE_ERROR' 
+    });
   }
 });
 
-router.post('/:id/regenerate-image', async (req, res) => {
+router.post('/:id/regenerate-image', authenticate, authorize('teacher'), async (req, res) => {
   const { customImageUrl } = req.body;
   
   try {
-    const announcement = await Announcement.findById(req.params.id);
-    if (!announcement) {
-      return res.status(404).json({ message: 'Announcement not found' });
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid announcement ID format', 
+        code: 'INVALID_ID' 
+      });
     }
 
-    // Authorization: require authorId in body or x-user-id header and match announcement author
-    const userId = req.body.authorId || req.headers['x-user-id'];
-    if (!userId || userId.toString() !== announcement.authorId.toString()) {
-      return res.status(403).json({ message: 'Not authorized to upload files to this announcement' });
+    const announcement = await Announcement.findById(req.params.id);
+    
+    if (!announcement) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Announcement not found', 
+        code: 'NOT_FOUND' 
+      });
+    }
+
+    // Authorization: Check if user owns this announcement
+    if (announcement.authorId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'You are not authorized to modify this announcement', 
+        code: 'FORBIDDEN' 
+      });
     }
 
     // If custom URL provided, use it; otherwise regenerate with AI
@@ -201,23 +358,52 @@ router.post('/:id/regenerate-image', async (req, res) => {
 
     announcement.imageUrl = imageUrl;
     const updatedAnnouncement = await announcement.save();
-    res.json(updatedAnnouncement);
+    res.json({ success: true, data: updatedAnnouncement });
   } catch (err) {
-    console.error('Error regenerating image:', err.message);
-    res.status(500).json({ message: 'Failed to regenerate image' });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to regenerate image', 
+      code: 'IMAGE_GENERATION_ERROR' 
+    });
   }
 });
 
-// Upload file attachments
-router.post('/:id/upload', upload.array('files', 5), async (req, res) => {
+// Upload file attachments with rate limiting
+router.post('/:id/upload', authenticate, authorize('teacher'), uploadLimiter, upload.array('files', 5), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ message: 'No files provided' });
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No files provided', 
+        code: 'NO_FILES' 
+      });
+    }
+
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid announcement ID format', 
+        code: 'INVALID_ID' 
+      });
     }
 
     const announcement = await Announcement.findById(req.params.id);
+    
     if (!announcement) {
-      return res.status(404).json({ message: 'Announcement not found' });
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Announcement not found', 
+        code: 'NOT_FOUND' 
+      });
+    }
+
+    // Authorization: Check if user owns this announcement
+    if (announcement.authorId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'You are not authorized to upload files to this announcement', 
+        code: 'FORBIDDEN' 
+      });
     }
 
     // Add uploaded files to attachments array
@@ -234,22 +420,50 @@ router.post('/:id/upload', upload.array('files', 5), async (req, res) => {
     
     await announcement.save();
     res.json({ 
+      success: true,
       message: 'Files uploaded successfully', 
-      attachments: newAttachments,
-      announcement 
+      data: {
+        attachments: newAttachments,
+        announcement
+      }
     });
   } catch (err) {
-    console.error('File upload error:', err.message);
-    res.status(500).json({ message: 'Failed to upload files' });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to upload files', 
+      code: 'UPLOAD_ERROR' 
+    });
   }
 });
 
 // Delete attachment
-router.delete('/:id/attachment/:attachmentId', async (req, res) => {
+router.delete('/:id/attachment/:attachmentId', authenticate, authorize('teacher'), async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id) || !isValidObjectId(req.params.attachmentId)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid ID format', 
+        code: 'INVALID_ID' 
+      });
+    }
+
     const announcement = await Announcement.findById(req.params.id);
+    
     if (!announcement) {
-      return res.status(404).json({ message: 'Announcement not found' });
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Announcement not found', 
+        code: 'NOT_FOUND' 
+      });
+    }
+
+    // Authorization: Check if user owns this announcement
+    if (announcement.authorId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'You are not authorized to delete attachments from this announcement', 
+        code: 'FORBIDDEN' 
+      });
     }
 
     const attachmentIndex = announcement.attachments.findIndex(
@@ -257,42 +471,31 @@ router.delete('/:id/attachment/:attachmentId', async (req, res) => {
     );
 
     if (attachmentIndex === -1) {
-      return res.status(404).json({ message: 'Attachment not found' });
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Attachment not found', 
+        code: 'ATTACHMENT_NOT_FOUND' 
+      });
     }
-
-    // Authorization: require authorId in body or x-user-id header and match announcement author
-    const userId = req.body.authorId || req.headers['x-user-id'];
-    if (!userId || userId.toString() !== announcement.authorId.toString()) {
-      return res.status(403).json({ message: 'Not authorized to delete attachments from this announcement' });
-    }
-
+    
     // Delete file from disk (best-effort)
     const attachment = announcement.attachments[attachmentIndex];
     if (attachment && attachment.fileUrl) {
       try {
         const safeAttachmentsDir = path.resolve(__dirname, '../uploads');
+        const filename = path.basename(attachment.fileUrl);
         
-        // Validate fileUrl is not absolute and doesn't contain path traversal
-        if (path.isAbsolute(attachment.fileUrl) || attachment.fileUrl.includes('..') || attachment.fileUrl.includes('\\')) {
-          console.error('Invalid file path detected, skipping deletion:', attachment.fileUrl);
+        // Validate filename and resolve path safely
+        if (!/^[A-Za-z0-9._-]+$/.test(filename)) {
+          // Invalid filename, skip deletion but continue
         } else {
-          // Extract filename and validate it
-          const filename = path.basename(attachment.fileUrl);
-          if (!/^[A-Za-z0-9._-]+$/.test(filename)) {
-            console.error('Invalid filename format, skipping deletion:', filename);
-          } else {
-            // Resolve absolute path and verify it's within safe directory
-            const filePath = path.resolve(safeAttachmentsDir, filename);
-            if (!filePath.startsWith(safeAttachmentsDir + path.sep)) {
-              console.error('File path escapes safe directory, skipping deletion:', filePath);
-            } else {
-              await fs.unlink(filePath);
-            }
+          const filePath = path.resolve(safeAttachmentsDir, filename);
+          if (filePath.startsWith(safeAttachmentsDir + path.sep)) {
+            await fs.unlink(filePath);
           }
         }
       } catch (fileErr) {
-        console.error('Failed to delete file from disk:', fileErr.message);
-        // continue even if unlink fails
+        // File deletion failed, but continue with DB update
       }
     }
 
@@ -300,63 +503,75 @@ router.delete('/:id/attachment/:attachmentId', async (req, res) => {
     announcement.attachments.splice(attachmentIndex, 1);
     await announcement.save();
 
-    res.json({ message: 'Attachment deleted', announcement });
+    res.json({ success: true, message: 'Attachment deleted', data: announcement });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete attachment', 
+      code: 'DELETE_ERROR' 
+    });
   }
 });
 
 // Delete announcement
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticate, authorize('teacher'), async (req, res) => {
   try {
-    const announcement = await Announcement.findById(req.params.id);
-    if (!announcement) return res.status(404).json({ message: 'Announcement not found' });
-
-    // Authorization: require authorId in body or x-user-id header and match announcement author
-    const userId = req.body.authorId || req.headers['x-user-id'];
-    if (!userId || userId.toString() !== announcement.authorId.toString()) {
-      return res.status(403).json({ message: 'Not authorized to delete this announcement' });
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid announcement ID format', 
+        code: 'INVALID_ID' 
+      });
     }
 
-    // Delete files from disk (best-effort)
+    const announcement = await Announcement.findById(req.params.id);
+    
+    if (!announcement) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Announcement not found', 
+        code: 'NOT_FOUND' 
+      });
+    }
+
+    // Authorization: Check if user owns this announcement
+    if (announcement.authorId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'You are not authorized to delete this announcement', 
+        code: 'FORBIDDEN' 
+      });
+    }
+
+    // Delete files from disk (best-effort - don't fail if files don't exist)
     if (announcement.attachments && announcement.attachments.length > 0) {
       const safeAttachmentsDir = path.resolve(__dirname, '../uploads');
       
       for (const att of announcement.attachments) {
         if (att.fileUrl) {
           try {
-            // Validate fileUrl is not absolute and doesn't contain path traversal
-            if (path.isAbsolute(att.fileUrl) || att.fileUrl.includes('..') || att.fileUrl.includes('\\')) {
-              console.error('Invalid file path detected, skipping deletion:', att.fileUrl);
-              continue;
-            }
-            
-            // Extract filename and validate it
             const filename = path.basename(att.fileUrl);
-            if (!/^[A-Za-z0-9._-]+$/.test(filename)) {
-              console.error('Invalid filename format, skipping deletion:', filename);
-              continue;
+            if (/^[A-Za-z0-9._-]+$/.test(filename)) {
+              const filePath = path.resolve(safeAttachmentsDir, filename);
+              if (filePath.startsWith(safeAttachmentsDir + path.sep)) {
+                await fs.unlink(filePath);
+              }
             }
-            
-            // Resolve absolute path and verify it's within safe directory
-            const filePath = path.resolve(safeAttachmentsDir, filename);
-            if (!filePath.startsWith(safeAttachmentsDir + path.sep)) {
-              console.error('File path escapes safe directory, skipping deletion:', filePath);
-              continue;
-            }
-            
-            await fs.unlink(filePath);
           } catch (fileErr) {
-            console.error('Failed to delete file from disk during announcement deletion:', fileErr.message);
+            // Continue even if file deletion fails
           }
         }
       }
     }
 
     await Announcement.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Announcement deleted' });
+    res.json({ success: true, message: 'Announcement deleted successfully' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to delete announcement', 
+      code: 'DELETE_ERROR' 
+    });
   }
 });
 
